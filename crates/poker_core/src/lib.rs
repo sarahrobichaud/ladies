@@ -1,14 +1,5 @@
-pub fn add(left: u64, right: u64) -> u64 {
-    left + right
-}
+pub mod card;
+pub mod deck;
+pub mod dealer;
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
+pub const AVAILABLE_SUITS: [card::Suit; 4] = [card::Suit::Heart, card::Suit::Club, card::Suit::Spade, card::Suit::Diamond];
