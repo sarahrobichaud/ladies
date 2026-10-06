@@ -1,6 +1,7 @@
 use rand::{Rng, seq::SliceRandom};
 
-use crate::card::{Card, RANKS, SUITS};
+
+use crate::card::{Card, ranks::RANKS, suits::SUITS};
 
 pub struct StandardDeck {
     cards: [Card; 52],
