@@ -47,9 +47,15 @@ const GOLDEN_SEVEN: &[(&str, HandValue)] = &[
     // The nine of hearts is dead weight; the royal flush still wins.
     ("Ah Kh Qh Jh Th 9h 2c", HandValue::StraightFlush(Rank::Ace)),
     // Two pair plus a bare pair must not be mistaken for a full house.
-    ("Ah Ad Kh Ks 2c 2d 3h", HandValue::TwoPair(Rank::Ace, Rank::King, Rank::Three)),
+    (
+        "Ah Ad Kh Ks 2c 2d 3h",
+        HandValue::TwoPair(Rank::Ace, Rank::King, Rank::Three),
+    ),
     // Trips aces pair with the kings, not the queens.
-    ("Ah Ad Ac Kh Ks Qd Qc", HandValue::FullHouse(Rank::Ace, Rank::King)),
+    (
+        "Ah Ad Ac Kh Ks Qd Qc",
+        HandValue::FullHouse(Rank::Ace, Rank::King),
+    ),
     (
         "2h 2d 2c 2s Ah Kd Qc",
         HandValue::FourOfAKind(Rank::Two, Rank::Ace),
@@ -133,10 +139,7 @@ fn hole_cards_and_board_dealt_from_one_deck_never_overlap() {
         let board = deck.deal_n::<5>().expect("a fresh deck has seven cards");
 
         for card in board {
-            assert!(
-                !hole.contains(&card),
-                "seed: {seed}, {card} dealt twice"
-            );
+            assert!(!hole.contains(&card), "seed: {seed}, {card} dealt twice");
         }
 
         Hand::new([hole.as_slice(), board.as_slice()].concat()).unwrap();

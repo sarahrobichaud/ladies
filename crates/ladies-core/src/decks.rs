@@ -199,7 +199,14 @@ mod tests {
 
         let cards = deck.deal_n::<3>().unwrap();
 
-        assert_eq!(cards, [card(Rank::Two, SUITS[0]), card(Rank::Three, SUITS[0]), card(Rank::Four, SUITS[0])]);
+        assert_eq!(
+            cards,
+            [
+                card(Rank::Two, SUITS[0]),
+                card(Rank::Three, SUITS[0]),
+                card(Rank::Four, SUITS[0])
+            ]
+        );
         assert_eq!(deck.remaining(), 49);
     }
 

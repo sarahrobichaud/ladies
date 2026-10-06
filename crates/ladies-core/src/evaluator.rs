@@ -184,9 +184,7 @@ fn evaluate_5(cards: &[Card; 5]) -> HandValue {
     } else if let Some(&trips) = trips.first() {
         HandValue::ThreeOfAKind(trips, [singles[0], singles[1]])
     } else if flush {
-        HandValue::Flush([
-            singles[0], singles[1], singles[2], singles[3], singles[4],
-        ])
+        HandValue::Flush([singles[0], singles[1], singles[2], singles[3], singles[4]])
     } else if pairs.len() == 2 {
         HandValue::TwoPair(pairs[0], pairs[1], singles[0])
     } else if pairs.len() == 1 {
@@ -296,13 +294,22 @@ mod tests {
     #[test]
     fn seven_card_hands_find_the_best_straight() {
         // Two overlapping straights; the ace-high one wins.
-        assert_eq!(value("Ah Kd Qc Js Td 9c 2d"), HandValue::Straight(Rank::Ace));
+        assert_eq!(
+            value("Ah Kd Qc Js Td 9c 2d"),
+            HandValue::Straight(Rank::Ace)
+        );
 
         // A straight hiding among paired cards.
-        assert_eq!(value("5h 5d 6c 7s 8d 9c Th"), HandValue::Straight(Rank::Ten));
+        assert_eq!(
+            value("5h 5d 6c 7s 8d 9c Th"),
+            HandValue::Straight(Rank::Ten)
+        );
 
         // The wheel among seven cards.
-        assert_eq!(value("Ah 2d 3c 4s 5d Kc Qd"), HandValue::Straight(Rank::Five));
+        assert_eq!(
+            value("Ah 2d 3c 4s 5d Kc Qd"),
+            HandValue::Straight(Rank::Five)
+        );
     }
 
     #[test]
@@ -416,8 +423,14 @@ mod tests {
 
     #[test]
     fn finds_straight_flushes() {
-        assert_eq!(value("5h 6h 7h 8h 9h"), HandValue::StraightFlush(Rank::Nine));
-        assert_eq!(value("Ah 2h 3h 4h 5h"), HandValue::StraightFlush(Rank::Five));
+        assert_eq!(
+            value("5h 6h 7h 8h 9h"),
+            HandValue::StraightFlush(Rank::Nine)
+        );
+        assert_eq!(
+            value("Ah 2h 3h 4h 5h"),
+            HandValue::StraightFlush(Rank::Five)
+        );
     }
 
     #[test]
@@ -521,7 +534,10 @@ mod tests {
         assert_eq!(value("9h Td Jc Qs Kd").to_string(), "Straight, K high");
         assert_eq!(value("Ah 2d 3c 4s 5d").to_string(), "Straight, 5 high");
         assert_eq!(value("Ah Kh Qh Jh 9h").to_string(), "Flush, A high");
-        assert_eq!(value("5h 6h 7h 8h 9h").to_string(), "Straight Flush, 9 high");
+        assert_eq!(
+            value("5h 6h 7h 8h 9h").to_string(),
+            "Straight Flush, 9 high"
+        );
         assert_eq!(
             value("7h 7d 7s Kh Kd").to_string(),
             "Full House, 7s over Ks"
