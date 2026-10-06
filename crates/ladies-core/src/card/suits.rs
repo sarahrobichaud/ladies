@@ -1,4 +1,7 @@
-use std::{fmt::{self, Display}, str::FromStr};
+use std::{
+    fmt::{self, Display},
+    str::FromStr,
+};
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Hash)]
 pub enum Suit {
@@ -50,7 +53,6 @@ impl FromStr for Suit {
 }
 
 pub const SUITS: [Suit; 4] = [Suit::Heart, Suit::Club, Suit::Spade, Suit::Diamond];
-
 
 #[cfg(test)]
 mod tests {

@@ -3,14 +3,13 @@ use std::{
     str::FromStr,
 };
 
-pub mod suits;
 pub mod ranks;
+pub mod suits;
 
 pub use crate::card::{
     ranks::{Rank, RankParseErr},
     suits::{Suit, SuitParseErr},
 };
-
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Card {
@@ -52,9 +51,9 @@ mod tests {
     use std::str::FromStr;
 
     use crate::card::{
+        Card, CardParseErr,
         ranks::{RANKS, Rank, RankParseErr},
         suits::{SUITS, Suit, SuitParseErr},
-        Card, CardParseErr,
     };
 
     #[test]

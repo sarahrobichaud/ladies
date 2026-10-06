@@ -5,57 +5,69 @@ use std::{
 
 use crate::card::{Card, CardParseErr};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub const MIN_CARDS: usize = 5;
+pub const MAX_CARDS: usize = 7;
+
+/// Five to seven distinct cards, as dealt from a deck.
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct Hand {
-    cards: [Card; 5],
+    cards: Vec<Card>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HandErr {
+    WrongCardCount(usize),
     DuplicateCard(Card),
 }
 
 impl Hand {
-    pub fn new(cards: [Card; 5]) -> Result<Self, HandErr> {
+    pub fn new(cards: Vec<Card>) -> Result<Self, HandErr> {
+        if !(MIN_CARDS..=MAX_CARDS).contains(&cards.len()) {
+            return Err(HandErr::WrongCardCount(cards.len()));
+        }
+
         for (i, card) in cards.iter().enumerate() {
             if cards[i + 1..].contains(card) {
                 return Err(HandErr::DuplicateCard(*card));
             }
         }
+
         Ok(Self { cards })
     }
 
-    pub fn cards(&self) -> &[Card; 5] {
+    pub fn cards(&self) -> &[Card] {
         &self.cards
     }
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum HandParseErr {
-    WrongLength(usize),
+    WrongCardCount(usize),
     BadCard(usize, CardParseErr),
     DuplicateCard(Card),
+}
+
+impl From<HandErr> for HandParseErr {
+    fn from(err: HandErr) -> Self {
+        match err {
+            HandErr::WrongCardCount(n) => HandParseErr::WrongCardCount(n),
+            HandErr::DuplicateCard(card) => HandParseErr::DuplicateCard(card),
+        }
+    }
 }
 
 impl FromStr for Hand {
     type Err = HandParseErr;
 
-    /// Parses ten rank/suit chars
+    /// Parses space-separated cards, e.g. `"Ah Kd Qc Js Ts"`.
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let chars: Vec<char> = s.chars().collect();
-        if chars.len() != 10 {
-            return Err(HandParseErr::WrongLength(chars.len()));
-        }
-
-        let mut cards = Vec::with_capacity(5);
-        for (i, pair) in chars.chunks(2).enumerate() {
-            let card_str: String = pair.iter().collect();
-            let card = Card::from_str(&card_str).map_err(|err| HandParseErr::BadCard(i, err))?;
+        let mut cards = Vec::new();
+        for (i, token) in s.split_whitespace().enumerate() {
+            let card = Card::from_str(token).map_err(|err| HandParseErr::BadCard(i, err))?;
             cards.push(card);
         }
 
-        let cards: [Card; 5] = cards.try_into().unwrap();
-        Hand::new(cards).map_err(|HandErr::DuplicateCard(card)| HandParseErr::DuplicateCard(card))
+        Ok(Hand::new(cards)?)
     }
 }
 
@@ -75,101 +87,108 @@ impl Display for Hand {
 mod tests {
     use std::str::FromStr;
 
-    use crate::card::{Card, Rank, Suit};
+    use crate::card::Card;
 
     use super::*;
 
-    fn card(rank: Rank, suit: Suit) -> Card {
-        Card { rank, suit }
+    /// Parses a single card, for precise assertions.
+    fn card(s: &str) -> Card {
+        Card::from_str(s).unwrap()
+    }
+
+    /// Parses space-separated cards, for building hands.
+    fn cards(s: &str) -> Vec<Card> {
+        s.split_whitespace().map(card).collect()
     }
 
     #[test]
     fn hands_accept_five_distinct_cards() {
-        let cards = [
-            card(Rank::Ace, Suit::Heart),
-            card(Rank::King, Suit::Diamond),
-            card(Rank::Queen, Suit::Club),
-            card(Rank::Jack, Suit::Spade),
-            card(Rank::Ten, Suit::Heart),
-        ];
+        let cards = cards("Ah Kd Qc Js Ts");
 
-        let hand = Hand::new(cards).unwrap();
+        let hand = Hand::new(cards.clone()).unwrap();
 
-        assert_eq!(hand.cards(), &cards);
+        assert_eq!(hand.cards(), &cards[..]);
+    }
+
+    #[test]
+    fn hands_accept_seven_distinct_cards() {
+        let cards = cards("Ah Kd Qc Js Ts 9c 8d");
+
+        let hand = Hand::new(cards.clone()).unwrap();
+
+        assert_eq!(hand.cards(), &cards[..]);
     }
 
     #[test]
     fn hands_reject_duplicate_cards() {
-        let cards = [
-            card(Rank::Ace, Suit::Heart),
-            card(Rank::Ace, Suit::Heart),
-            card(Rank::Queen, Suit::Club),
-            card(Rank::Jack, Suit::Spade),
-            card(Rank::Ten, Suit::Heart),
-        ];
+        let cards = cards("Ah Ah Qc Js Ts");
 
+        assert_eq!(Hand::new(cards), Err(HandErr::DuplicateCard(card("Ah"))));
+    }
+
+    #[test]
+    fn hands_reject_wrong_card_counts() {
         assert_eq!(
-            Hand::new(cards),
-            Err(HandErr::DuplicateCard(card(Rank::Ace, Suit::Heart)))
+            Hand::new(cards("Ah Kd Qc Js")),
+            Err(HandErr::WrongCardCount(4))
+        );
+        assert_eq!(
+            Hand::new(cards("Ah Kd Qc Js Ts 9c 8d 7h")),
+            Err(HandErr::WrongCardCount(8))
         );
     }
 
     #[test]
-    fn hands_parse_from_ten_chars() {
-        let hand = Hand::from_str("AhKdQcJsTs").unwrap();
+    fn hands_parse_from_space_separated_cards() {
+        let hand = Hand::from_str("Ah Kd Qc Js Ts").unwrap();
 
-        let expected = [
-            card(Rank::Ace, Suit::Heart),
-            card(Rank::King, Suit::Diamond),
-            card(Rank::Queen, Suit::Club),
-            card(Rank::Jack, Suit::Spade),
-            card(Rank::Ten, Suit::Spade),
-        ];
+        let expected = [card("Ah"), card("Kd"), card("Qc"), card("Js"), card("Ts")];
 
         assert_eq!(hand.cards(), &expected);
     }
 
     #[test]
-    fn hands_parse_rejects_wrong_length() {
-        assert_eq!(Hand::from_str(""), Err(HandParseErr::WrongLength(0)));
-        assert_eq!(Hand::from_str("AhKdQcJsT"), Err(HandParseErr::WrongLength(9)));
+    fn hands_parse_seven_cards() {
+        let hand = Hand::from_str("Ah Kd Qc Js Ts 9c 8d").unwrap();
+
+        assert_eq!(hand.cards().len(), 7);
+        assert_eq!(hand.cards()[6], card("8d"));
+    }
+
+    #[test]
+    fn hands_parse_rejects_wrong_card_counts() {
+        assert_eq!(Hand::from_str(""), Err(HandParseErr::WrongCardCount(0)));
         assert_eq!(
-            Hand::from_str("AhKdQcJsTsXx"),
-            Err(HandParseErr::WrongLength(12))
+            Hand::from_str("Ah Kd Qc Js"),
+            Err(HandParseErr::WrongCardCount(4))
+        );
+        assert_eq!(
+            Hand::from_str("Ah Kd Qc Js Ts 9c 8d 7h"),
+            Err(HandParseErr::WrongCardCount(8))
         );
     }
 
     #[test]
     fn hands_parse_reports_the_bad_card_position() {
         assert_eq!(
-            Hand::from_str("AhKmQcJs3d"),
-            Err(HandParseErr::BadCard(
-                1,
-                CardParseErr::BadSuit(Suit::from_str("m").unwrap_err())
-            ))
-        );
-        assert_eq!(
-            Hand::from_str("AhKdQcJsxx"),
-            Err(HandParseErr::BadCard(
-                4,
-                CardParseErr::BadRank(Rank::from_str("x").unwrap_err())
-            ))
+            Hand::from_str("Ah Kd xx"),
+            Err(HandParseErr::BadCard(2, Card::from_str("xx").unwrap_err()))
         );
     }
 
     #[test]
     fn hands_parse_rejects_duplicate_cards() {
         assert_eq!(
-            Hand::from_str("AhAhQcJsTs"),
-            Err(HandParseErr::DuplicateCard(card(Rank::Ace, Suit::Heart)))
+            Hand::from_str("Ah Ah Qc Js Ts"),
+            Err(HandParseErr::DuplicateCard(card("Ah")))
         );
     }
 
     #[test]
     fn hands_round_trip_through_display() {
-        let hand = Hand::from_str("AhKdQcJsTs").unwrap();
-
-        assert_eq!(hand.to_string(), "Ah Kd Qc Js Ts");
-        assert_eq!(Hand::from_str(&hand.to_string().replace(' ', "")), Ok(hand));
+        for hand in ["Ah Kd Qc Js Ts", "2c 7h 3d 7d Ks 7s Kd"] {
+            let hand = Hand::from_str(hand).unwrap();
+            assert_eq!(Hand::from_str(&hand.to_string()), Ok(hand));
+        }
     }
 }

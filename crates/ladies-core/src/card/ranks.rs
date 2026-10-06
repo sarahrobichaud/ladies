@@ -109,7 +109,9 @@ mod tests {
 
     use crate::card::ranks::{RANKS, Rank, RankParseErr};
 
-    const EXPECTED_CHARS: [char; 13] = ['2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K', 'A'];
+    const EXPECTED_CHARS: [char; 13] = [
+        '2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K', 'A',
+    ];
 
     #[test]
     fn ranks_have_correct_char_mappings() {
