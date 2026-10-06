@@ -1,5 +1,5 @@
 
-use ladies_core::deck::StandardDeck;
+use ladies_core::decks::StandardDeck;
 
 fn main() {
 
@@ -11,4 +11,5 @@ fn main() {
         println!("{} - {}", c, card);
         c += 1;
     }
+
 }

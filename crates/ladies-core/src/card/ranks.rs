@@ -41,6 +41,10 @@ impl Rank {
         RANKS.get(i).copied()
     }
 
+    pub fn to_index(self) -> usize {
+        self as usize - 2
+    }
+
     pub fn to_char(self) -> char {
         match self {
             Rank::Two => '2',
@@ -145,6 +149,14 @@ mod tests {
     fn ranks_round_trip_through_display() {
         for rank in RANKS {
             assert_eq!(Rank::from_str(&rank.to_string()), Ok(rank));
+        }
+    }
+
+    #[test]
+    fn ranks_round_trip_through_index() {
+        for (i, rank) in RANKS.iter().enumerate() {
+            assert_eq!(rank.to_index(), i);
+            assert_eq!(Rank::from_index(i), Some(*rank));
         }
     }
 }

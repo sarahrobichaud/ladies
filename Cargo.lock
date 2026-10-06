@@ -48,6 +48,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "ladies-engine"
+version = "0.1.0"
+
+[[package]]
 name = "ladies-tui"
 version = "0.1.0"
 dependencies = [

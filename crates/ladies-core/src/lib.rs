@@ -1,2 +1,8 @@
 pub mod card;
-pub mod deck;
+pub mod decks;
+pub mod evaluator;
+pub mod hand;
+
+pub use card::{Card, Rank, Suit};
+pub use evaluator::{Category, HandValue, evaluate};
+pub use hand::{Hand, HandErr};
