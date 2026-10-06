@@ -10,6 +10,7 @@ pub enum Category {
     Pair,
     TwoPair,
     ThreeOfAKind,
+    Straight,
     FullHouse,
     FourOfAKind,
 }
@@ -27,6 +28,8 @@ pub enum HandValue {
     TwoPair(Rank, Rank, Rank),
     /// The trips, then kickers high to low.
     ThreeOfAKind(Rank, [Rank; 2]),
+    /// Five consecutive ranks; the high end (Five for the wheel).
+    Straight(Rank),
     /// The trips, then the pair.
     FullHouse(Rank, Rank),
     /// The quads, then the kicker.
@@ -40,6 +43,7 @@ impl HandValue {
             HandValue::Pair(..) => Category::Pair,
             HandValue::TwoPair(..) => Category::TwoPair,
             HandValue::ThreeOfAKind(..) => Category::ThreeOfAKind,
+            HandValue::Straight(_) => Category::Straight,
             HandValue::FullHouse(..) => Category::FullHouse,
             HandValue::FourOfAKind(..) => Category::FourOfAKind,
         }
@@ -55,6 +59,7 @@ impl Display for HandValue {
                 write!(f, "Two Pair, {}s and {}s", high.to_char(), low.to_char())
             }
             HandValue::ThreeOfAKind(rank, _) => write!(f, "Three of a Kind, {}s", rank.to_char()),
+            HandValue::Straight(high) => write!(f, "Straight, {} high", high.to_char()),
             HandValue::FullHouse(trips, pair) => {
                 write!(
                     f,
@@ -155,6 +160,8 @@ fn evaluate_5(cards: &[Card; 5]) -> HandValue {
         HandValue::FourOfAKind(quads, singles[0])
     } else if let (Some(&trips), Some(&pair)) = (trips.first(), pairs.first()) {
         HandValue::FullHouse(trips, pair)
+    } else if let Some(high) = straight_high(&counts) {
+        HandValue::Straight(high)
     } else if let Some(&trips) = trips.first() {
         HandValue::ThreeOfAKind(trips, [singles[0], singles[1]])
     } else if pairs.len() == 2 {
@@ -164,6 +171,25 @@ fn evaluate_5(cards: &[Card; 5]) -> HandValue {
     } else {
         HandValue::HighCard([singles[0], singles[1], singles[2], singles[3], singles[4]])
     }
+}
+
+/// High card of the best straight in `counts`, if one exists.
+///
+/// The wheel (A-2-3-4-5) plays five-high, so the ace doubles as low;
+/// no other run wraps around it.
+fn straight_high(counts: &[u8; RANKS.len()]) -> Option<Rank> {
+    let wheel = [Rank::Two, Rank::Three, Rank::Four, Rank::Five, Rank::Ace];
+    if wheel.into_iter().all(|rank| counts[rank.to_index()] > 0) {
+        return Some(Rank::Five);
+    }
+
+    for high in (4..RANKS.len()).rev() {
+        if (high - 4..=high).all(|i| counts[i] > 0) {
+            return Some(RANKS[high]);
+        }
+    }
+
+    None
 }
 
 #[cfg(test)]
@@ -211,6 +237,67 @@ mod tests {
     }
 
     #[test]
+    fn finds_straights_with_the_high_end() {
+        assert_eq!(value("9h Td Jc Qs Kd"), HandValue::Straight(Rank::King));
+        assert_eq!(value("Ah Kd Qc Js Td"), HandValue::Straight(Rank::Ace));
+    }
+
+    #[test]
+    fn finds_the_wheel_as_five_high() {
+        assert_eq!(value("Ah 2d 3c 4s 5d"), HandValue::Straight(Rank::Five));
+    }
+
+    #[test]
+    fn does_not_wrap_around_the_ace() {
+        // Q-K-A-2-3 is not a straight; it falls back to high card.
+        assert_eq!(
+            value("Qh Kd Ac 2s 3d"),
+            HandValue::HighCard([Rank::Ace, Rank::King, Rank::Queen, Rank::Three, Rank::Two])
+        );
+    }
+
+    #[test]
+    fn straights_compare_by_high_end() {
+        assert!(value("9h Td Jc Qs Kd") > value("8h 9d Tc Js Qd"));
+        // The wheel is the lowest straight: five-high, below six-high.
+        assert!(value("Ah 2d 3c 4s 5d") < value("2h 3d 4c 5s 6h"));
+        assert!(value("Th Jd Qc Ks Ad") > value("9h Td Jc Qs Kd"));
+    }
+
+    #[test]
+    fn straights_beat_trips_and_lose_to_full_houses() {
+        assert!(value("9h Td Jc Qs Kd") > value("7h 7d 7s Ad Kc"));
+        assert!(value("9h Td Jc Qs Kd") < value("7h 7d 7s Kd Kc"));
+    }
+
+    #[test]
+    fn seven_card_hands_find_the_best_straight() {
+        // Two overlapping straights; the ace-high one wins.
+        assert_eq!(value("Ah Kd Qc Js Td 9c 2d"), HandValue::Straight(Rank::Ace));
+
+        // A straight hiding among paired cards.
+        assert_eq!(value("5h 5d 6c 7s 8d 9c Th"), HandValue::Straight(Rank::Ten));
+
+        // The wheel among seven cards.
+        assert_eq!(value("Ah 2d 3c 4s 5d Kc Qd"), HandValue::Straight(Rank::Five));
+    }
+
+    #[test]
+    fn paired_or_gapped_runs_are_not_straights() {
+        // Duplicate rank breaks the run: 5-5-6-7-8 has no five distinct ranks.
+        assert_eq!(
+            value("5h 5d 6c 7s 8d"),
+            HandValue::Pair(Rank::Five, [Rank::Eight, Rank::Seven, Rank::Six])
+        );
+
+        // Gap in the run.
+        assert_eq!(
+            value("5h 6d 7c 9s Td"),
+            HandValue::HighCard([Rank::Ten, Rank::Nine, Rank::Seven, Rank::Six, Rank::Five])
+        );
+    }
+
+    #[test]
     fn finds_full_houses() {
         assert_eq!(
             value("7h 7d 7s Kh Kd"),
@@ -236,13 +323,15 @@ mod tests {
         let pair = value("2h 2d Ah Kc Qs");
         let two_pair = value("2h 2d 3h 3d Ac");
         let trips = value("2h 2d 2s Ac Kd");
+        let straight = value("Ah 2d 3c 4s 5d");
         let full_house = value("2h 2d 2s Kc Kd");
         let quads = value("2h 2d 2s 2c Kd");
 
         assert!(high_card < pair);
         assert!(pair < two_pair);
         assert!(two_pair < trips);
-        assert!(trips < full_house);
+        assert!(trips < straight);
+        assert!(straight < full_house);
         assert!(full_house < quads);
     }
 
@@ -338,6 +427,7 @@ mod tests {
         assert_eq!(value("2h 2d Ah Kc Qs").category(), Category::Pair);
         assert_eq!(value("2h 2d 3h 3d Ac").category(), Category::TwoPair);
         assert_eq!(value("2h 2d 2s Ac Kd").category(), Category::ThreeOfAKind);
+        assert_eq!(value("Ah 2d 3c 4s 5d").category(), Category::Straight);
         assert_eq!(value("2h 2d 2s Kc Kd").category(), Category::FullHouse);
         assert_eq!(value("2h 2d 2s 2c Kd").category(), Category::FourOfAKind);
     }
@@ -348,6 +438,8 @@ mod tests {
         assert_eq!(value("2h 2d Ah Kc Qs").to_string(), "Pair of 2s");
         assert_eq!(value("Ah Ad Kh Ks Qc").to_string(), "Two Pair, As and Ks");
         assert_eq!(value("7h 7d 7s Ad Qc").to_string(), "Three of a Kind, 7s");
+        assert_eq!(value("9h Td Jc Qs Kd").to_string(), "Straight, K high");
+        assert_eq!(value("Ah 2d 3c 4s 5d").to_string(), "Straight, 5 high");
         assert_eq!(
             value("7h 7d 7s Kh Kd").to_string(),
             "Full House, 7s over Ks"
