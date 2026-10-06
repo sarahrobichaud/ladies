@@ -29,6 +29,23 @@ impl StandardDeck {
         self.cursor += 1;
         Some(card)
     }
+
+    /// Deals the next `N` cards, or `None` if fewer than `N` remain.
+    pub fn deal_n<const N: usize>(&mut self) -> Option<[Card; N]> {
+        if self.remaining() < N {
+            return None;
+        }
+
+        let cards: [Card; N] = self.cards[self.cursor..self.cursor + N]
+            .try_into()
+            .expect("slice length checked above");
+        self.cursor += N;
+        Some(cards)
+    }
+
+    pub fn remaining(&self) -> usize {
+        self.cards.len() - self.cursor
+    }
 }
 
 impl Default for StandardDeck {
@@ -48,6 +65,10 @@ mod tests {
 
     fn get_fresh_standard_deck() -> StandardDeck {
         StandardDeck::new()
+    }
+
+    fn card(rank: Rank, suit: Suit) -> Card {
+        Card { rank, suit }
     }
 
     #[test]
@@ -170,6 +191,46 @@ mod tests {
 
         assert_eq!(dealt.len(), 52);
         assert_eq!(dealt.into_iter().collect::<HashSet<_>>().len(), 52);
+    }
+
+    #[test]
+    fn deal_n_returns_the_next_n_cards_in_order() {
+        let mut deck = get_fresh_standard_deck();
+
+        let cards = deck.deal_n::<3>().unwrap();
+
+        assert_eq!(cards, [card(Rank::Two, SUITS[0]), card(Rank::Three, SUITS[0]), card(Rank::Four, SUITS[0])]);
+        assert_eq!(deck.remaining(), 49);
+    }
+
+    #[test]
+    fn deal_n_is_all_or_nothing_when_the_deck_runs_low() {
+        let mut deck = get_fresh_standard_deck();
+
+        for _ in 0..50 {
+            deck.deal();
+        }
+        assert_eq!(deck.remaining(), 2);
+
+        assert_eq!(deck.deal_n::<3>(), None);
+        assert_eq!(deck.remaining(), 2, "failed deal must not consume cards");
+
+        assert_eq!(deck.deal_n::<2>().is_some(), true);
+        assert_eq!(deck.remaining(), 0);
+    }
+
+    #[test]
+    fn deal_n_can_deal_the_whole_deck() {
+        let mut deck = get_fresh_standard_deck();
+
+        let mut seen = HashSet::new();
+        while let Some(cards) = deck.deal_n::<5>() {
+            seen.extend(cards);
+        }
+
+        // 50 cards in ten 5-card chunks; the last 2 need single deals.
+        assert_eq!(seen.len(), 50);
+        assert_eq!(deck.remaining(), 2);
     }
 
     #[test]
