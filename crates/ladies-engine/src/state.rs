@@ -1,15 +1,16 @@
 use ladies_core::{Card, decks::StandardDeck};
 use rand::{SeedableRng, rngs::StdRng};
 
-use crate::player::Player;
+pub use crate::state::blinds::Blinds;
+pub use crate::state::player::Player;
+
+mod action;
+mod blinds;
+mod player;
+mod step;
 
 pub type Chips = u64;
 pub type Seat = usize;
-
-pub const SMALL_BLIND: Chips = 1;
-pub const BIG_BLIND: Chips = 2;
-pub const BIG_BLIND_SEAT: Seat = 1;
-pub const BUTTON: Seat = 0;
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Street {
@@ -29,56 +30,105 @@ pub enum Status {
 
 #[derive(Clone)]
 pub struct GameState {
-    pub players: [Player; 2],
+    pub players: Vec<Player>,
     pub street: Street,
     pub board: Vec<Card>,
     pub deck: Vec<Card>,
     pub current_bet: Chips,
     pub to_act: Seat,
-    pub needs_action: [bool; 2],
+    pub bb_seat: Seat,
+    pub sb_seat: Seat,
+    pub button: Seat,
+}
+
+pub struct GameStateInitOptions {
+    button: usize,
+    blinds: Blinds,
 }
 
 impl GameState {
-    pub fn new(seed: u64, stacks: [Chips; 2]) -> Self {
+    pub fn new(seed: u64, stacks: &[Chips], options: GameStateInitOptions) -> Self {
         let mut deck = StandardDeck::new();
-
         deck.shuffle(&mut StdRng::seed_from_u64(seed));
 
-        let holes = [
-            deck.deal_n::<2>().expect("52 cards"),
-            deck.deal_n::<2>().expect("52 cards"),
-        ];
+        let mut players = setup_players(&mut deck, stacks);
+        let (board, deck) = prepare_cards(&mut deck);
 
-        let mut undealt = Vec::with_capacity(deck.remaining());
+        let (sb_seat, bb_seat) = get_blind_seats(options.button, &players);
 
-        while let Some(card) = deck.deal() {
-            undealt.push(card);
-        }
-
-        let mut players = [
-            Player::new(holes[0], stacks[0]),
-            Player::new(holes[1], stacks[1]),
-        ];
-
-        let board = Vec::with_capacity(5);
-
-        players[BUTTON].post(SMALL_BLIND);
-        players[BIG_BLIND_SEAT].post(BIG_BLIND);
+        players[sb_seat].post(options.blinds.small);
+        players[bb_seat].post(options.blinds.big);
 
         Self {
             street: Street::Preflop,
-            current_bet: players[BIG_BLIND_SEAT].bet,
-            board,
+            current_bet: players[bb_seat].bet,
+            to_act: bb_seat + 1 % players.len(),
             players,
-            deck: undealt,
-            to_act: BUTTON,
-            needs_action: [false, true],
+            board,
+            deck,
+            sb_seat,
+            bb_seat,
+            button: options.button,
         }
     }
 
     pub fn pot(&self) -> Chips {
         self.players.iter().map(|p| p.committed).sum()
     }
+
+    fn next_active_from(&self, seat: Seat) -> Seat {
+        let n = self.players.len();
+        (1..=n)
+            .map(|offset| (seat + offset) % n)
+            .find(|&s| self.players[s].status == Status::Active)
+            .expect("No active player remains")
+    }
+
+    fn first_to_act_preflop(&self) -> Seat {
+        if self.players.len() == 2 {
+            self.sb_seat
+        } else {
+            self.next_active_from(self.bb_seat)
+        }
+    }
+
+    fn first_to_act_postflop(&self) -> Seat {
+        self.next_active_from(self.button)
+    }
+}
+
+fn setup_players(deck: &mut StandardDeck, stacks: &[Chips]) -> Vec<Player> {
+    let holes: Vec<[Card; 2]> = (0..stacks.len())
+        .map(|_| deck.deal_n::<2>().expect("52 cards"))
+        .collect();
+
+    holes
+        .iter()
+        .zip(stacks)
+        .map(|(&hole, &stack)| Player::new(hole, stack))
+        .collect()
+}
+
+fn prepare_cards(deck: &mut StandardDeck) -> (Vec<Card>, Vec<Card>) {
+    let board = Vec::with_capacity(5);
+    let mut undealt = Vec::with_capacity(deck.remaining());
+
+    while let Some(card) = deck.deal() {
+        undealt.push(card);
+    }
+
+    (board, undealt)
+}
+
+fn get_blind_seats(button: usize, players: &[Player]) -> (usize, usize) {
+    let sb_seat = if players.len() == 2 {
+        button
+    } else {
+        (button + 1) % players.len()
+    };
+    let bb_seat = (sb_seat + 1) % players.len();
+
+    (sb_seat, bb_seat)
 }
 
 #[cfg(test)]
@@ -88,22 +138,32 @@ mod tests {
 
     use ladies_core::Card;
 
-    use crate::state::{BIG_BLIND, BIG_BLIND_SEAT, BUTTON, Chips, GameState, SMALL_BLIND};
+    use crate::state::{Blinds, Chips, GameState, GameStateInitOptions};
 
-    fn stacks() -> [Chips; 2] {
-        [5000, 5000]
+    const STARTING_STACK: Chips = 5000;
+
+    fn stacks<const N: usize>() -> [Chips; N] {
+        [STARTING_STACK; N]
     }
+
+    const OPTIONS: GameStateInitOptions = GameStateInitOptions {
+        button: 0,
+        blinds: Blinds {
+            small: 100,
+            big: 200,
+        },
+    };
 
     #[test]
     fn same_seed_deals_the_same_cards() {
         let seed = 1;
 
-        let state = GameState::new(seed, stacks());
+        let state = GameState::new(seed, &stacks::<2>(), OPTIONS);
 
         let p1 = state.players[0].hole;
         let p2 = state.players[1].hole;
 
-        let state = GameState::new(seed, stacks());
+        let state = GameState::new(seed, &stacks::<2>(), OPTIONS);
 
         assert_eq!(p1, state.players[0].hole);
         assert_eq!(p2, state.players[1].hole);
@@ -111,33 +171,50 @@ mod tests {
 
     #[test]
     fn different_seed_deals_different_cards() {
-        let state = GameState::new(1, stacks());
+        let state = GameState::new(1, &stacks::<2>(), OPTIONS);
 
         let p1 = state.players[0].hole;
         let p2 = state.players[1].hole;
 
-        let state = GameState::new(2, stacks());
+        let state = GameState::new(2, &stacks::<2>(), OPTIONS);
 
         assert_ne!(p1, state.players[0].hole);
         assert_ne!(p2, state.players[1].hole);
     }
 
     #[test]
-    fn new_games_post_blinds() {
-        let state = GameState::new(1, stacks());
+    fn heads_up_games_post_blind_from_button() {
+        let state = GameState::new(1, &stacks::<2>(), OPTIONS);
+        let bb_seat = 1; // heads-up: seat after the button/SB
 
-        assert_eq!(state.players[BIG_BLIND_SEAT].bet, BIG_BLIND);
-        assert_eq!(state.players[BIG_BLIND_SEAT].stack, 4998);
+        assert_eq!(state.players[bb_seat].bet, OPTIONS.blinds.big);
+        assert_eq!(
+            state.players[bb_seat].stack,
+            STARTING_STACK - OPTIONS.blinds.big
+        );
 
-        assert_eq!(state.players[BUTTON].bet, SMALL_BLIND);
-        assert_eq!(state.players[BUTTON].stack, 4999);
+        assert_eq!(state.players[OPTIONS.button].bet, OPTIONS.blinds.small);
+        assert_eq!(
+            state.players[OPTIONS.button].stack,
+            STARTING_STACK - OPTIONS.blinds.small
+        );
 
         assert_eq!(state.pot(), 3);
     }
 
     #[test]
-    fn dealing_consumes_four_cards_from_the_deck() {
-        let state = GameState::new(1, stacks());
+    fn multiway_games_post_blinds_after_the_button() {
+        let state = GameState::new(1, &stacks::<3>(), OPTIONS);
+
+        assert_eq!(state.players[1].bet, OPTIONS.blinds.small);
+        assert_eq!(state.players[2].bet, OPTIONS.blinds.big);
+        assert_eq!(state.players[0].bet, 0);
+        assert_eq!(state.pot(), 3);
+    }
+
+    #[test]
+    fn dealing_consumes_cards_from_the_deck() {
+        let state = GameState::new(1, &stacks::<2>(), OPTIONS);
 
         assert_eq!(state.deck.len(), 48);
 

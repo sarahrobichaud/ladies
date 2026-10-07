@@ -1,0 +1,6 @@
+[package]
+name = "ladies-driver"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
