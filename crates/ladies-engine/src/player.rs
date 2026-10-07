@@ -1,6 +1,7 @@
 use crate::state::{Chips, Status};
 use ladies_core::Card;
 
+#[derive(Debug, Clone)]
 pub struct Player {
     pub(crate) stack: Chips,
     pub(crate) bet: Chips,

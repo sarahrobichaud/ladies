@@ -27,6 +27,7 @@ pub enum Status {
     AllIn,
 }
 
+#[derive(Clone)]
 pub struct GameState {
     pub players: [Player; 2],
     pub street: Street,
@@ -34,6 +35,7 @@ pub struct GameState {
     pub deck: Vec<Card>,
     pub current_bet: Chips,
     pub to_act: Seat,
+    pub needs_action: [bool; 2],
 }
 
 impl GameState {
@@ -70,6 +72,7 @@ impl GameState {
             players,
             deck: undealt,
             to_act: BUTTON,
+            needs_action: [false, true],
         }
     }
 
