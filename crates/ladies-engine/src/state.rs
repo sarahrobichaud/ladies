@@ -3,29 +3,23 @@ use rand::{SeedableRng, rngs::StdRng};
 
 pub use crate::state::blinds::Blinds;
 pub use crate::state::player::Player;
+pub use crate::state::street::Street;
 
 mod action;
 mod blinds;
 mod player;
 mod step;
+mod street;
 
 pub type Chips = u64;
 pub type Seat = usize;
 
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Street {
-    Preflop,
-    Flop,
-    Turn,
-    River,
-    Showdown,
-}
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq)]
-pub enum Status {
-    Active,
-    Folded,
-    AllIn,
+#[derive(Clone)]
+struct GameStatePositions {
+    sb: Seat,
+    bb: Seat,
+    button: Seat,
+    to_act: Seat,
 }
 
 #[derive(Clone)]
@@ -35,10 +29,7 @@ pub struct GameState {
     pub board: Vec<Card>,
     pub deck: Vec<Card>,
     pub current_bet: Chips,
-    pub to_act: Seat,
-    pub bb_seat: Seat,
-    pub sb_seat: Seat,
-    pub button: Seat,
+    pub positions: GameStatePositions,
 }
 
 pub struct GameStateInitOptions {
@@ -49,11 +40,11 @@ pub struct GameStateInitOptions {
 impl GameState {
     pub fn new(seed: u64, stacks: &[Chips], options: GameStateInitOptions) -> Self {
         let mut deck = StandardDeck::new();
+
         deck.shuffle(&mut StdRng::seed_from_u64(seed));
 
         let mut players = setup_players(&mut deck, stacks);
         let (board, deck) = prepare_cards(&mut deck);
-
         let (sb_seat, bb_seat) = get_blind_seats(options.button, &players);
 
         players[sb_seat].post(options.blinds.small);
@@ -62,13 +53,15 @@ impl GameState {
         Self {
             street: Street::Preflop,
             current_bet: players[bb_seat].bet,
-            to_act: bb_seat + 1 % players.len(),
-            players,
             board,
             deck,
-            sb_seat,
-            bb_seat,
-            button: options.button,
+            positions: GameStatePositions {
+                sb: sb_seat,
+                bb: bb_seat,
+                button: options.button,
+                to_act: first_to_act_preflop(sb_seat, bb_seat, &players),
+            },
+            players,
         }
     }
 
@@ -76,24 +69,24 @@ impl GameState {
         self.players.iter().map(|p| p.committed).sum()
     }
 
-    fn next_active_from(&self, seat: Seat) -> Seat {
-        let n = self.players.len();
-        (1..=n)
-            .map(|offset| (seat + offset) % n)
-            .find(|&s| self.players[s].status == Status::Active)
-            .expect("No active player remains")
+    fn next_active(&self, from: Seat) -> Seat {
+        next_active_from(from, &self.players)
     }
+}
 
-    fn first_to_act_preflop(&self) -> Seat {
-        if self.players.len() == 2 {
-            self.sb_seat
-        } else {
-            self.next_active_from(self.bb_seat)
-        }
-    }
+fn next_active_from(seat: Seat, players: &[Player]) -> Seat {
+    let n = players.len();
+    (1..=n)
+        .map(|offset| next_seat(seat + offset, n))
+        .find(|&s| players[s].can_play())
+        .expect("No active player remains")
+}
 
-    fn first_to_act_postflop(&self) -> Seat {
-        self.next_active_from(self.button)
+fn first_to_act_preflop(sb_seat: Seat, bb_seat: Seat, players: &[Player]) -> Seat {
+    if players.len() == 2 {
+        sb_seat
+    } else {
+        next_active_from(bb_seat, players)
     }
 }
 
@@ -120,13 +113,17 @@ fn prepare_cards(deck: &mut StandardDeck) -> (Vec<Card>, Vec<Card>) {
     (board, undealt)
 }
 
+fn next_seat(seat: Seat, table_size: usize) -> Seat {
+    (seat + 1) % table_size
+}
+
 fn get_blind_seats(button: usize, players: &[Player]) -> (usize, usize) {
     let sb_seat = if players.len() == 2 {
         button
     } else {
-        (button + 1) % players.len()
+        next_seat(button, players.len())
     };
-    let bb_seat = (sb_seat + 1) % players.len();
+    let bb_seat = next_seat(sb_seat, players.len());
 
     (sb_seat, bb_seat)
 }

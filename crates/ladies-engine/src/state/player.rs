@@ -1,7 +1,12 @@
-use std::os::linux::raw::stat;
-
-use crate::state::{Chips, Status};
+use crate::state::Chips;
 use ladies_core::Card;
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+pub enum Status {
+    Active,
+    Folded,
+    AllIn,
+}
 
 #[derive(Debug, Clone)]
 pub struct Player {
@@ -25,12 +30,8 @@ impl Player {
         }
     }
 
-    pub fn is_playable(&self) -> Option<&Self> {
-        if self.status == Status::Active {
-            Some(self)
-        } else {
-            None
-        }
+    pub fn can_play(&self) -> bool {
+        self.status == Status::Active
     }
 
     pub fn post(&mut self, amount: Chips) {
