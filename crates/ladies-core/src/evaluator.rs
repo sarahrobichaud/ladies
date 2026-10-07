@@ -167,7 +167,7 @@ fn evaluate_5(cards: &[Card; 5]) -> HandValue {
         .collect();
 
     let straight = straight_high(&counts);
-    let flush = suit_counts.iter().any(|&count| count == 5);
+    let flush = suit_counts.contains(&5);
 
     // Five cards partition exactly one way, so these indices are in bounds:
     // quads leaves 1 kicker, trips leaves 2 singles, one pair leaves 3,
