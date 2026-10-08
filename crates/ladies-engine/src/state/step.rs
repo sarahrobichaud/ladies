@@ -28,8 +28,9 @@ fn apply(mutation: &mut GameState, seat: Seat, action: Action) -> Result<&GameSt
     Ok(mutation)
 }
 
-fn advance(mut state: &mut GameState, seat: Seat) -> Result<&GameState, GameError> {
-    Ok(state)
+fn advance(mut mutation: &mut GameState, seat: Seat) -> Result<&GameState, GameError> {
+    mutation.to_act = super::next_active_from(seat, &mutation.players);
+    Ok(mutation)
 }
 
 #[cfg(test)]
@@ -53,5 +54,14 @@ mod tests {
 
         assert!(!next.players[utg].can_play());
         assert!(!next.players[utg].needs_action);
+    }
+
+    #[test]
+    fn fold_passes_action_to_the_next_player() {
+        let state = GameState::new(1, &[5000; 3], OPTIONS);
+
+        let next = step(&state, Action::Fold).unwrap();
+
+        assert_eq!(next.to_act, state.positions.sb);
     }
 }
