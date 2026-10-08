@@ -34,11 +34,9 @@ fn apply_action(
     match action {
         Action::Fold => {
             subject.status = Status::Folded;
-            subject.needs_action = false;
         }
         Action::Call => {
             subject.post(owed);
-            subject.needs_action = false;
         }
         Action::Check => {
             if subject.bet < mutation.current_bet {
@@ -46,11 +44,10 @@ fn apply_action(
                     reason: "Cannot check when facing a bet",
                 });
             }
-
-            subject.needs_action = false
         }
     }
 
+    subject.needs_action = false;
     Ok(mutation)
 }
 
@@ -60,6 +57,8 @@ fn advance_turn(mutation: &mut GameState, seat: Seat) -> Result<&GameState, Tran
     if is_fold_win(mutation) {
         award_pot(mutation);
         mutation.street = Street::Complete;
+    } else if is_round_closed(mutation) {
+        advance_street(mutation);
     }
 
     Ok(mutation)
@@ -67,6 +66,43 @@ fn advance_turn(mutation: &mut GameState, seat: Seat) -> Result<&GameState, Tran
 
 fn is_fold_win(state: &GameState) -> bool {
     state.players.iter().filter(|p| p.can_play()).count() == 1
+}
+
+fn is_round_closed(state: &GameState) -> bool {
+    if !state.players.iter().any(|p| p.can_play()) {
+        todo!("Implement all-in runout");
+    }
+
+    state
+        .players
+        .iter()
+        .filter(|p| p.can_play())
+        .all(|p| !p.needs_action)
+}
+
+fn advance_street(mutation: &mut GameState) {
+    for p in &mut mutation.players {
+        p.bet = 0; // commited is kept
+    }
+
+    mutation.current_bet = 0;
+
+    mutation.street = match mutation.street {
+        Street::Preflop => {
+            let flop: Vec<_> = mutation.deck.drain(..3).collect();
+            mutation.board.extend(flop);
+            Street::Flop
+        }
+        Street::Flop => todo!("turn"),
+        Street::Turn => todo!("river"),
+        Street::River => todo!("showdown"),
+        Street::Showdown | Street::Complete => todo!("showdown handling"),
+    };
+
+    mutation.to_act = super::next_active_from(mutation.positions.button, &mutation.players);
+    for p in &mut mutation.players {
+        p.needs_action = p.can_play();
+    }
 }
 
 fn award_pot(mutation: &mut GameState) {
@@ -86,7 +122,10 @@ fn award_pot(mutation: &mut GameState) {
 
 #[cfg(test)]
 mod tests {
-    use crate::state::{Blinds, GameState, GameStateInitOptions, TransitionError, action::Action};
+    use crate::{
+        Street,
+        state::{Blinds, GameState, GameStateInitOptions, TransitionError, action::Action},
+    };
 
     const OPTIONS: GameStateInitOptions = GameStateInitOptions {
         button: 0,
@@ -171,8 +210,27 @@ mod tests {
 
         let next = state.step_with(Action::Call).unwrap();
 
-        assert_eq!(next.players[bb].bet, OPTIONS.blinds.big);
+        assert_eq!(next.players[bb].committed, OPTIONS.blinds.big);
         assert_eq!(next.players[bb].stack, 5000 - OPTIONS.blinds.big);
-        assert!(!next.players[bb].needs_action);
+    }
+
+    #[test]
+    fn the_bb_option_closes_the_preflop_round() {
+        let state = GameState::new(1, &[5000; 3], OPTIONS);
+        let state = state.step_with(Action::Call).unwrap(); // UTG
+        let state = state.step_with(Action::Call).unwrap(); // SB
+
+        let next = state.step_with(Action::Check).unwrap(); // BB's option closes the round
+
+        assert_eq!(next.street, Street::Flop);
+        assert_eq!(next.board.len(), 3);
+        assert_eq!(next.current_bet, 0);
+        assert_eq!(next.to_act, next.positions.sb); // first active left of the button
+        assert_eq!(next.pot(), 600); // sweep moves nothing
+
+        for player in &next.players {
+            assert_eq!(player.bet, 0); // bets swept
+            assert_eq!(player.needs_action, player.can_play()); // fresh round
+        }
     }
 }
