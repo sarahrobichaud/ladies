@@ -5,4 +5,5 @@ pub enum Street {
     Turn,
     River,
     Showdown,
+    Complete,
 }

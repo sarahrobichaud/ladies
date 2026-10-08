@@ -2,14 +2,14 @@ use ladies_core::{Card, decks::StandardDeck};
 use rand::{SeedableRng, rngs::StdRng};
 
 pub use crate::state::blinds::Blinds;
+pub use crate::state::phases::Street;
 pub use crate::state::player::Player;
-pub use crate::state::street::Street;
 
 mod action;
 mod blinds;
+mod phases;
 mod player;
 mod step;
-mod street;
 
 pub type Chips = u64;
 pub type Seat = usize;
@@ -72,6 +72,10 @@ impl GameState {
     pub fn pot(&self) -> Chips {
         self.players.iter().map(|p| p.committed).sum()
     }
+
+    pub fn is_hand_over(&self) -> bool {
+        self.street == Street::Complete
+    }
 }
 
 fn setup_players(deck: &mut StandardDeck, stacks: &[Chips]) -> Vec<Player> {
@@ -118,7 +122,7 @@ fn first_to_act_preflop(sb_seat: Seat, bb_seat: Seat, players: &[Player]) -> Sea
     }
 }
 
-fn get_blind_seats(button: usize, players: &[Player]) -> (usize, usize) {
+fn get_blind_seats(button: Seat, players: &[Player]) -> (Seat, Seat) {
     let sb_seat = if players.len() == 2 {
         button
     } else {
@@ -143,7 +147,7 @@ mod tests {
 
     const STARTING_STACK: Chips = 5000;
 
-    fn stacks<const N: usize>() -> [Chips; N] {
+    fn stacks<const N: Seat>() -> [Chips; N] {
         [STARTING_STACK; N]
     }
 
