@@ -14,9 +14,7 @@ pub fn step(state: &GameState, action: Action) -> Result<GameState, GameError> {
 
 fn apply(state: &mut GameState, seat: usize, action: Action) -> Result<&GameState, GameError> {
     match action {
-        Action::Play => {
-            state.needs_action[seat] = false;
-        }
+        Action::Play => {}
     }
 
     Ok(state)

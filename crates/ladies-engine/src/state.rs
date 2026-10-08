@@ -1,3 +1,5 @@
+use std::os::unix::raw::off_t;
+
 use ladies_core::{Card, decks::StandardDeck};
 use rand::{SeedableRng, rngs::StdRng};
 
@@ -15,11 +17,10 @@ pub type Chips = u64;
 pub type Seat = usize;
 
 #[derive(Clone)]
-struct GameStatePositions {
-    sb: Seat,
-    bb: Seat,
-    button: Seat,
-    to_act: Seat,
+pub struct Positions {
+    pub sb: Seat,
+    pub bb: Seat,
+    pub button: Seat,
 }
 
 #[derive(Clone)]
@@ -29,7 +30,8 @@ pub struct GameState {
     pub board: Vec<Card>,
     pub deck: Vec<Card>,
     pub current_bet: Chips,
-    pub positions: GameStatePositions,
+    pub positions: Positions,
+    pub to_act: Seat,
 }
 
 pub struct GameStateInitOptions {
@@ -55,38 +57,18 @@ impl GameState {
             current_bet: players[bb_seat].bet,
             board,
             deck,
-            positions: GameStatePositions {
+            positions: Positions {
                 sb: sb_seat,
                 bb: bb_seat,
                 button: options.button,
-                to_act: first_to_act_preflop(sb_seat, bb_seat, &players),
             },
+            to_act: first_to_act_preflop(sb_seat, bb_seat, &players),
             players,
         }
     }
 
     pub fn pot(&self) -> Chips {
         self.players.iter().map(|p| p.committed).sum()
-    }
-
-    fn next_active(&self, from: Seat) -> Seat {
-        next_active_from(from, &self.players)
-    }
-}
-
-fn next_active_from(seat: Seat, players: &[Player]) -> Seat {
-    let n = players.len();
-    (1..=n)
-        .map(|offset| next_seat(seat + offset, n))
-        .find(|&s| players[s].can_play())
-        .expect("No active player remains")
-}
-
-fn first_to_act_preflop(sb_seat: Seat, bb_seat: Seat, players: &[Player]) -> Seat {
-    if players.len() == 2 {
-        sb_seat
-    } else {
-        next_active_from(bb_seat, players)
     }
 }
 
@@ -117,6 +99,23 @@ fn next_seat(seat: Seat, table_size: usize) -> Seat {
     (seat + 1) % table_size
 }
 
+fn next_active_from(seat: Seat, players: &[Player]) -> Seat {
+    let table_size = players.len();
+
+    let mut map = (0..table_size).map(|offset| next_seat(seat + offset, table_size));
+
+    map.find(|&s| players[s].can_play())
+        .expect("No active player remains")
+}
+
+fn first_to_act_preflop(sb_seat: Seat, bb_seat: Seat, players: &[Player]) -> Seat {
+    if players.len() == 2 {
+        sb_seat
+    } else {
+        next_active_from(bb_seat, players)
+    }
+}
+
 fn get_blind_seats(button: usize, players: &[Player]) -> (usize, usize) {
     let sb_seat = if players.len() == 2 {
         button
@@ -131,16 +130,30 @@ fn get_blind_seats(button: usize, players: &[Player]) -> (usize, usize) {
 #[cfg(test)]
 mod tests {
 
-    use std::collections::HashSet;
+    use std::{collections::HashSet, str::FromStr};
 
     use ladies_core::Card;
 
-    use crate::state::{Blinds, Chips, GameState, GameStateInitOptions};
+    use crate::state::{
+        Blinds, Chips, GameState, GameStateInitOptions, Player, get_blind_seats, next_active_from,
+        next_seat, player::Status,
+    };
 
     const STARTING_STACK: Chips = 5000;
 
     fn stacks<const N: usize>() -> [Chips; N] {
         [STARTING_STACK; N]
+    }
+
+    fn player(status: Status) -> Player {
+        Player {
+            stack: 2000,
+            bet: 0,
+            committed: 0,
+            hole: [Card::from_str("Ad").unwrap(), Card::from_str("Kd").unwrap()],
+            status,
+            needs_action: false,
+        }
     }
 
     const OPTIONS: GameStateInitOptions = GameStateInitOptions {
@@ -150,6 +163,31 @@ mod tests {
             big: 200,
         },
     };
+
+    #[test]
+    fn next_seat_returns_the_next_seat_index_from_a_target() {
+        assert_eq!(next_seat(7, 8), 0);
+        assert_eq!(next_seat(2, 5), 3);
+        assert_eq!(next_seat(0, 1), 0);
+        assert_eq!(next_seat(0, 2), 1);
+        assert_eq!(next_seat(1, 2), 0);
+    }
+
+    #[test]
+    fn next_active_from_only_finds_players_who_can_play() {
+        let players = [
+            player(Status::Folded),
+            player(Status::AllIn),
+            player(Status::Active),
+            player(Status::Folded),
+            player(Status::Active),
+            player(Status::Folded),
+        ];
+
+        assert_eq!(next_active_from(1, &players), 2);
+        assert_eq!(next_active_from(2, &players), 4);
+        assert_eq!(next_active_from(4, &players), 2);
+    }
 
     #[test]
     fn same_seed_deals_the_same_cards() {
@@ -164,6 +202,68 @@ mod tests {
 
         assert_eq!(p1, state.players[0].hole);
         assert_eq!(p2, state.players[1].hole);
+    }
+
+    #[test]
+    fn preflop_first_to_act_is_sb_in_heads_up() {
+        let state = GameState::new(0, &stacks::<2>(), OPTIONS);
+        assert_eq!(state.to_act, state.positions.sb);
+
+        let state = GameState::new(1, &stacks::<2>(), OPTIONS);
+        assert_eq!(state.to_act, state.positions.sb);
+    }
+
+    #[test]
+    fn preflop_first_to_act_is_left_of_bb_in_multiway() {
+        let state = GameState::new(0, &stacks::<3>(), OPTIONS);
+
+        assert_eq!(
+            state.to_act,
+            next_seat(state.positions.bb, state.players.len())
+        );
+
+        let state = GameState::new(1, &stacks::<3>(), OPTIONS);
+
+        assert_eq!(
+            state.to_act,
+            next_seat(state.positions.bb, state.players.len())
+        );
+
+        let state = GameState::new(2, &stacks::<3>(), OPTIONS);
+
+        assert_eq!(
+            state.to_act,
+            next_seat(state.positions.bb, state.players.len())
+        );
+    }
+
+    #[test]
+    fn assigns_blind_seats_correctly_in_heads_up() {
+        let state = GameState::new(1, &stacks::<2>(), OPTIONS);
+
+        let (sb, bb) = get_blind_seats(0, &state.players);
+
+        assert_eq!(sb, 0);
+        assert_eq!(bb, 1);
+        let (sb, bb) = get_blind_seats(1, &state.players);
+
+        assert_eq!(sb, 1);
+        assert_eq!(bb, 0);
+    }
+
+    #[test]
+    fn assigns_blind_seats_correctly_in_multiway() {
+        let state = GameState::new(1, &stacks::<3>(), OPTIONS);
+
+        let (sb, bb) = get_blind_seats(0, &state.players);
+
+        assert_eq!(sb, 1);
+        assert_eq!(bb, 2);
+
+        let (sb, bb) = get_blind_seats(1, &state.players);
+
+        assert_eq!(sb, 2);
+        assert_eq!(bb, 0);
     }
 
     #[test]
@@ -182,13 +282,12 @@ mod tests {
     #[test]
     fn heads_up_games_post_blind_from_button() {
         let state = GameState::new(1, &stacks::<2>(), OPTIONS);
-        let bb_seat = 1; // heads-up: seat after the button/SB
+        let bb = &state.players[state.positions.bb];
 
-        assert_eq!(state.players[bb_seat].bet, OPTIONS.blinds.big);
-        assert_eq!(
-            state.players[bb_seat].stack,
-            STARTING_STACK - OPTIONS.blinds.big
-        );
+        assert_eq!(state.positions.bb, state.positions.button + 1);
+
+        assert_eq!(bb.bet, OPTIONS.blinds.big);
+        assert_eq!(bb.stack, STARTING_STACK - OPTIONS.blinds.big);
 
         assert_eq!(state.players[OPTIONS.button].bet, OPTIONS.blinds.small);
         assert_eq!(
@@ -196,17 +295,20 @@ mod tests {
             STARTING_STACK - OPTIONS.blinds.small
         );
 
-        assert_eq!(state.pot(), 3);
+        assert_eq!(state.pot(), OPTIONS.blinds.small + OPTIONS.blinds.big);
     }
 
     #[test]
     fn multiway_games_post_blinds_after_the_button() {
         let state = GameState::new(1, &stacks::<3>(), OPTIONS);
 
+        assert_eq!(state.positions.bb, state.positions.sb + 1);
+        assert_eq!(state.positions.sb, state.positions.button + 1);
+
         assert_eq!(state.players[1].bet, OPTIONS.blinds.small);
         assert_eq!(state.players[2].bet, OPTIONS.blinds.big);
         assert_eq!(state.players[0].bet, 0);
-        assert_eq!(state.pot(), 3);
+        assert_eq!(state.pot(), OPTIONS.blinds.small + OPTIONS.blinds.big);
     }
 
     #[test]
@@ -214,6 +316,19 @@ mod tests {
         let state = GameState::new(1, &stacks::<2>(), OPTIONS);
 
         assert_eq!(state.deck.len(), 48);
+
+        let all: HashSet<Card> = state
+            .players
+            .iter()
+            .flat_map(|p| p.hole)
+            .chain(state.deck.iter().copied())
+            .collect();
+
+        assert_eq!(all.len(), 52);
+
+        let state = GameState::new(1, &stacks::<3>(), OPTIONS);
+
+        assert_eq!(state.deck.len(), 46);
 
         let all: HashSet<Card> = state
             .players
