@@ -5,19 +5,29 @@ use crate::state::player::Status;
 
 use super::GameState;
 use super::action::Action;
-use super::action::GameError;
 
-pub fn step(state: &GameState, action: Action) -> Result<GameState, GameError> {
-    let mut next = state.clone();
-    let seat = next.to_act;
-
-    apply(&mut next, seat, action)?;
-    advance(&mut next, seat)?;
-
-    Ok(next)
+#[derive(Debug)]
+pub enum TransitionError {
+    IllegalAction { reason: &'static str },
 }
 
-fn apply(mutation: &mut GameState, seat: Seat, action: Action) -> Result<&GameState, GameError> {
+impl GameState {
+    pub fn step_with(&self, action: Action) -> Result<Self, TransitionError> {
+        let mut next = self.clone();
+        let seat = next.to_act;
+
+        apply_action(&mut next, seat, action)?;
+        advance_turn(&mut next, seat)?;
+
+        Ok(next)
+    }
+}
+
+fn apply_action(
+    mutation: &mut GameState,
+    seat: Seat,
+    action: Action,
+) -> Result<&GameState, TransitionError> {
     let subject = &mut mutation.players[seat];
 
     match action {
@@ -30,7 +40,7 @@ fn apply(mutation: &mut GameState, seat: Seat, action: Action) -> Result<&GameSt
     Ok(mutation)
 }
 
-fn advance(mutation: &mut GameState, seat: Seat) -> Result<&GameState, GameError> {
+fn advance_turn(mutation: &mut GameState, seat: Seat) -> Result<&GameState, TransitionError> {
     mutation.to_act = super::next_active_from(seat, &mutation.players);
 
     if is_fold_win(mutation) {
@@ -62,7 +72,7 @@ fn award_pot(mutation: &mut GameState) {
 
 #[cfg(test)]
 mod tests {
-    use crate::state::{Blinds, GameState, GameStateInitOptions, action::Action, step::step};
+    use crate::state::{Blinds, GameState, GameStateInitOptions, action::Action};
 
     const OPTIONS: GameStateInitOptions = GameStateInitOptions {
         button: 0,
@@ -77,7 +87,7 @@ mod tests {
         let state = GameState::new(1, &[5000; 3], OPTIONS);
         let utg = state.to_act;
 
-        let next = step(&state, Action::Fold).unwrap();
+        let next = state.step_with(Action::Fold).unwrap();
 
         assert!(!next.players[utg].can_play());
         assert!(!next.players[utg].needs_action);
@@ -87,7 +97,7 @@ mod tests {
     fn fold_passes_action_to_the_next_player() {
         let state = GameState::new(1, &[5000; 3], OPTIONS);
 
-        let next = step(&state, Action::Fold).unwrap();
+        let next = state.step_with(Action::Fold).unwrap();
 
         assert_eq!(next.to_act, state.positions.sb);
     }
@@ -96,8 +106,8 @@ mod tests {
     fn folding_around_ends_the_hand() {
         let state = GameState::new(1, &[5000; 3], OPTIONS);
 
-        let state = step(&state, Action::Fold).unwrap();
-        let state = step(&state, Action::Fold).unwrap();
+        let state = state.step_with(Action::Fold).unwrap();
+        let state = state.step_with(Action::Fold).unwrap();
 
         assert!(state.is_hand_over())
     }
@@ -106,8 +116,8 @@ mod tests {
     fn last_player_standing_wins_the_pot() {
         let state = GameState::new(1, &[5000; 3], OPTIONS);
 
-        let state = step(&state, Action::Fold).unwrap(); // UTG
-        let state = step(&state, Action::Fold).unwrap(); // SB
+        let state = state.step_with(Action::Fold).unwrap(); // UTG
+        let state = state.step_with(Action::Fold).unwrap(); // SB
 
         let bb = state.positions.bb;
 
