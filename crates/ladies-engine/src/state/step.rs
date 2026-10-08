@@ -23,3 +23,6 @@ fn apply(state: &mut GameState, seat: usize, action: Action) -> Result<&GameStat
 fn advance(mut state: &mut GameState, seat: usize) -> Result<&GameState, GameError> {
     Ok(state)
 }
+
+#[cfg(test)]
+mod tests {}

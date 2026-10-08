@@ -1,5 +1,3 @@
-use std::os::unix::raw::off_t;
-
 use ladies_core::{Card, decks::StandardDeck};
 use rand::{SeedableRng, rngs::StdRng};
 
@@ -35,7 +33,7 @@ pub struct GameState {
 }
 
 pub struct GameStateInitOptions {
-    button: usize,
+    button: Seat,
     blinds: Blinds,
 }
 
@@ -51,6 +49,10 @@ impl GameState {
 
         players[sb_seat].post(options.blinds.small);
         players[bb_seat].post(options.blinds.big);
+
+        for player in &mut players {
+            player.needs_action = player.can_play();
+        }
 
         Self {
             street: Street::Preflop,
@@ -102,9 +104,9 @@ fn next_seat(seat: Seat, table_size: usize) -> Seat {
 fn next_active_from(seat: Seat, players: &[Player]) -> Seat {
     let table_size = players.len();
 
-    let mut map = (0..table_size).map(|offset| next_seat(seat + offset, table_size));
-
-    map.find(|&s| players[s].can_play())
+    (0..table_size)
+        .map(|offset| next_seat(seat + offset, table_size))
+        .find(|&s| players[s].can_play())
         .expect("No active player remains")
 }
 
@@ -135,8 +137,8 @@ mod tests {
     use ladies_core::Card;
 
     use crate::state::{
-        Blinds, Chips, GameState, GameStateInitOptions, Player, get_blind_seats, next_active_from,
-        next_seat, player::Status,
+        Blinds, Chips, GameState, GameStateInitOptions, Player, Seat, next_active_from, next_seat,
+        player::Status,
     };
 
     const STARTING_STACK: Chips = 5000;
@@ -163,6 +165,9 @@ mod tests {
             big: 200,
         },
     };
+    fn with_button(button: Seat) -> GameStateInitOptions {
+        GameStateInitOptions { button, ..OPTIONS }
+    }
 
     #[test]
     fn next_seat_returns_the_next_seat_index_from_a_target() {
@@ -239,31 +244,28 @@ mod tests {
 
     #[test]
     fn assigns_blind_seats_correctly_in_heads_up() {
-        let state = GameState::new(1, &stacks::<2>(), OPTIONS);
+        let state = GameState::new(0, &stacks::<2>(), with_button(0));
 
-        let (sb, bb) = get_blind_seats(0, &state.players);
+        assert_eq!(state.positions.sb, 0);
+        assert_eq!(state.positions.bb, 1);
 
-        assert_eq!(sb, 0);
-        assert_eq!(bb, 1);
-        let (sb, bb) = get_blind_seats(1, &state.players);
+        let state = GameState::new(0, &stacks::<2>(), with_button(1));
 
-        assert_eq!(sb, 1);
-        assert_eq!(bb, 0);
+        assert_eq!(state.positions.sb, 1);
+        assert_eq!(state.positions.bb, 0);
     }
 
     #[test]
     fn assigns_blind_seats_correctly_in_multiway() {
-        let state = GameState::new(1, &stacks::<3>(), OPTIONS);
+        let state = GameState::new(1, &stacks::<3>(), with_button(0));
 
-        let (sb, bb) = get_blind_seats(0, &state.players);
+        assert_eq!(state.positions.sb, 1);
+        assert_eq!(state.positions.bb, 2);
 
-        assert_eq!(sb, 1);
-        assert_eq!(bb, 2);
+        let state = GameState::new(1, &stacks::<3>(), with_button(1));
 
-        let (sb, bb) = get_blind_seats(1, &state.players);
-
-        assert_eq!(sb, 2);
-        assert_eq!(bb, 0);
+        assert_eq!(state.positions.sb, 2);
+        assert_eq!(state.positions.bb, 0);
     }
 
     #[test]
@@ -277,6 +279,20 @@ mod tests {
 
         assert_ne!(p1, state.players[0].hole);
         assert_ne!(p2, state.players[1].hole);
+    }
+
+    #[test]
+    fn short_stack_posts_all_in_from_the_blind() {
+        // seat 1 is SB with 50 < small blind 100
+        let state = GameState::new(1, &[5000, 50, 5000], OPTIONS);
+
+        let sb = &state.players[1];
+        assert_eq!(sb.bet, 50);
+        assert_eq!(sb.stack, 0);
+        assert!(!sb.can_play());
+        assert!(!sb.needs_action);
+
+        assert_eq!(state.to_act, next_seat(state.positions.bb, 3));
     }
 
     #[test]
@@ -326,6 +342,8 @@ mod tests {
 
         assert_eq!(all.len(), 52);
 
+        assert!(state.board.is_empty());
+
         let state = GameState::new(1, &stacks::<3>(), OPTIONS);
 
         assert_eq!(state.deck.len(), 46);
@@ -338,5 +356,22 @@ mod tests {
             .collect();
 
         assert_eq!(all.len(), 52);
+        assert!(state.board.is_empty());
+    }
+
+    #[test]
+    fn current_bet_is_correct_after_blinds() {
+        let state = GameState::new(0, &stacks::<2>(), OPTIONS);
+
+        assert_eq!(state.current_bet, OPTIONS.blinds.big);
+    }
+
+    #[test]
+    fn active_players_start_needing_action() {
+        let state = GameState::new(1, &stacks::<3>(), OPTIONS);
+
+        for player in &state.players {
+            assert_eq!(player.needs_action, player.can_play());
+        }
     }
 }
