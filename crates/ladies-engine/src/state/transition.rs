@@ -29,11 +29,25 @@ fn apply_action(
     action: Action,
 ) -> Result<&GameState, TransitionError> {
     let subject = &mut mutation.players[seat];
+    let owed = mutation.current_bet - subject.bet;
 
     match action {
         Action::Fold => {
             subject.status = Status::Folded;
             subject.needs_action = false;
+        }
+        Action::Call => {
+            subject.post(owed);
+            subject.needs_action = false;
+        }
+        Action::Check => {
+            if subject.bet < mutation.current_bet {
+                return Err(TransitionError::IllegalAction {
+                    reason: "Cannot check when facing a bet",
+                });
+            }
+
+            subject.needs_action = false
         }
     }
 
@@ -72,7 +86,7 @@ fn award_pot(mutation: &mut GameState) {
 
 #[cfg(test)]
 mod tests {
-    use crate::state::{Blinds, GameState, GameStateInitOptions, action::Action};
+    use crate::state::{Blinds, GameState, GameStateInitOptions, TransitionError, action::Action};
 
     const OPTIONS: GameStateInitOptions = GameStateInitOptions {
         button: 0,
@@ -123,5 +137,42 @@ mod tests {
 
         assert_eq!(state.players[bb].stack, 5100);
         assert_eq!(state.pot(), 0);
+    }
+
+    #[test]
+    fn a_call_matches_the_current_bet() {
+        let state = GameState::new(1, &[5000; 3], OPTIONS);
+        let utg = state.to_act;
+
+        let next = state.step_with(Action::Call).unwrap();
+
+        let caller = &next.players[utg];
+        assert_eq!(caller.bet, OPTIONS.blinds.big); // matched the BB's 200
+        assert_eq!(caller.stack, 5000 - OPTIONS.blinds.big);
+        assert!(!caller.needs_action);
+        assert_eq!(next.to_act, next.positions.sb); // action moves on
+    }
+
+    #[test]
+    fn checking_when_facing_a_bet_is_illegal() {
+        let state = GameState::new(1, &[5000; 3], OPTIONS); // UTG faces the BB's 200
+
+        let result = state.step_with(Action::Check);
+
+        assert!(matches!(result, Err(TransitionError::IllegalAction { .. })));
+    }
+
+    #[test]
+    fn a_call_when_owing_nothing_bets_nothing() {
+        let state = GameState::new(1, &[5000; 3], OPTIONS);
+        let state = state.step_with(Action::Call).unwrap(); // UTG calls (owed 200)
+        let state = state.step_with(Action::Call).unwrap(); // SB calls (owed 100)
+        let bb = state.positions.bb;
+
+        let next = state.step_with(Action::Call).unwrap();
+
+        assert_eq!(next.players[bb].bet, OPTIONS.blinds.big);
+        assert_eq!(next.players[bb].stack, 5000 - OPTIONS.blinds.big);
+        assert!(!next.players[bb].needs_action);
     }
 }

@@ -76,7 +76,7 @@ fn next_button(button: Seat, table_size: usize) -> Seat {
 
 #[cfg(test)]
 mod tests {
-    use ladies_engine::Action;
+    use ladies_engine::{Action, state::TransitionError::IllegalAction};
 
     use super::*;
 
@@ -166,5 +166,20 @@ mod tests {
         let result = session.start_hand(2);
 
         assert!(matches!(result, Err(SessionError::HandInProgress)));
+    }
+
+    #[test]
+    fn an_illegal_action_leaves_the_hand_in_place() {
+        let blinds = Blinds::new(100, 200).expect("good blinds");
+        let mut session = Session::new(blinds, &[5000; 3]);
+        session.start_hand(1).expect("first hand dealt");
+
+        let result = session.act(Action::Check); // utg faces a bet
+
+        assert!(matches!(
+            result,
+            Err(SessionError::Game(IllegalAction { .. }))
+        ));
+        assert!(session.hand().is_some(), "hand survives a rejected action");
     }
 }
