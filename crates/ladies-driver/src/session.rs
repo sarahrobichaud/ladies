@@ -52,7 +52,7 @@ impl Session {
 
         if next.is_hand_over() {
             self.stacks = next.stacks();
-            self.button = (self.button + 1) % self.stacks.len();
+            self.button = next_button(self.button, self.stacks.len());
             self.hand = None;
         } else {
             self.hand = Some(next);
@@ -68,6 +68,10 @@ impl Session {
     pub fn stacks(&self) -> &[Chips] {
         &self.stacks
     }
+}
+
+fn next_button(button: Seat, table_size: usize) -> Seat {
+    (button + 1) % table_size
 }
 
 #[cfg(test)]
@@ -142,6 +146,15 @@ mod tests {
 
         let hand = session.hand().expect("second hand in progress");
         assert_eq!(hand.positions.button, 1);
+    }
+
+    #[test]
+    fn the_button_cycles_around_the_table() {
+        assert_eq!(next_button(0, 3), 1);
+        assert_eq!(next_button(1, 3), 2);
+        assert_eq!(next_button(2, 3), 0); // wraparound
+        assert_eq!(next_button(0, 2), 1); // heads-up: button/SB alternates
+        assert_eq!(next_button(1, 2), 0);
     }
 
     #[test]
