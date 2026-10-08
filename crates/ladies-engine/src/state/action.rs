@@ -1,7 +1,8 @@
 pub enum Action {
-    Play,
+    Fold,
 }
 
+#[derive(Debug)]
 pub enum GameError {
     IllegalAction { reason: &'static str },
 }

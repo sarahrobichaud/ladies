@@ -1,3 +1,6 @@
+use crate::state::Seat;
+use crate::state::player::Status;
+
 use super::GameState;
 use super::action::Action;
 use super::action::GameError;
@@ -12,17 +15,43 @@ pub fn step(state: &GameState, action: Action) -> Result<GameState, GameError> {
     Ok(next)
 }
 
-fn apply(state: &mut GameState, seat: usize, action: Action) -> Result<&GameState, GameError> {
+fn apply(mutation: &mut GameState, seat: Seat, action: Action) -> Result<&GameState, GameError> {
+    let subject = &mut mutation.players[seat];
+
     match action {
-        Action::Play => {}
+        Action::Fold => {
+            subject.status = Status::Folded;
+            subject.needs_action = false;
+        }
     }
 
-    Ok(state)
+    Ok(mutation)
 }
 
-fn advance(mut state: &mut GameState, seat: usize) -> Result<&GameState, GameError> {
+fn advance(mut state: &mut GameState, seat: Seat) -> Result<&GameState, GameError> {
     Ok(state)
 }
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use crate::state::{Blinds, GameState, GameStateInitOptions, action::Action, step::step};
+
+    const OPTIONS: GameStateInitOptions = GameStateInitOptions {
+        button: 0,
+        blinds: Blinds {
+            small: 100,
+            big: 200,
+        },
+    };
+
+    #[test]
+    fn fold_puts_a_player_out_of_play() {
+        let state = GameState::new(1, &[5000; 3], OPTIONS);
+        let utg = state.to_act;
+
+        let next = step(&state, Action::Fold).unwrap();
+
+        assert!(!next.players[utg].can_play());
+        assert!(!next.players[utg].needs_action);
+    }
+}
