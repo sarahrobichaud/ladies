@@ -33,8 +33,8 @@ pub struct GameState {
 }
 
 pub struct GameStateInitOptions {
-    button: Seat,
-    blinds: Blinds,
+    pub button: Seat,
+    pub blinds: Blinds,
 }
 
 impl GameState {
@@ -71,6 +71,10 @@ impl GameState {
 
     pub fn pot(&self) -> Chips {
         self.players.iter().map(|p| p.committed).sum()
+    }
+
+    pub fn stacks(&self) -> Vec<Chips> {
+        self.players.iter().map(|p| p.stack).collect()
     }
 
     pub fn is_hand_over(&self) -> bool {

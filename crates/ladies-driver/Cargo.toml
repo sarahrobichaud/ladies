@@ -4,3 +4,4 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+ladies-engine = { version = "0.1.0", path = "../ladies-engine" }
