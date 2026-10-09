@@ -78,7 +78,7 @@ impl HandState {
 
         Self {
             street: Street::Preflop,
-            current_bet: players[bb_seat].bet,
+            current_bet: options.blinds.big,
             min_raise: options.blinds.big * 2,
             blinds: options.blinds,
             board: Vec::with_capacity(5),

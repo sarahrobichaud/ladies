@@ -553,4 +553,21 @@ mod tests {
         assert_eq!(next.current_bet, 200);
         assert_eq!(next.min_raise, 400); // the update rule applies postflop too
     }
+
+    #[test]
+    fn the_initial_bet_requirement_survives_a_short_blind_bet() {
+        let state = HandState::new(1, &[5000, 5000, 50], OPTIONS); // BB all-in for 50
+
+        assert_eq!(state.players[2].bet, 50); // the short post
+        assert_eq!(state.players[2].stack, 0); // all-in
+        assert!(state.players[2].can_win_pot()); // but still eligible
+        assert_eq!(state.current_bet, OPTIONS.blinds.big); // the requirement survives
+
+        let next = state.apply(Action::Call).unwrap(); // UTG calls the full 200
+        let next = next.apply(Action::Call).unwrap(); // SB — the old underflow site;
+
+        assert_eq!(next.street, Street::Flop);
+        assert_eq!(next.players[0].committed, OPTIONS.blinds.big);
+        assert_eq!(next.players[1].committed, OPTIONS.blinds.big);
+    }
 }
