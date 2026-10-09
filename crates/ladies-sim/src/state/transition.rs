@@ -1,3 +1,5 @@
+use std::fmt;
+
 use crate::state::Chips;
 use crate::state::Seat;
 use crate::state::Street;
@@ -7,10 +9,22 @@ use ladies_core::{Card, Hand, evaluate};
 use super::GameState;
 use super::action::Action;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransitionError {
-    IllegalAction { reason: &'static str },
+    CheckFacingBet,
+    RaiseBelowMinRaise { min: Chips },
 }
+
+impl fmt::Display for TransitionError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::CheckFacingBet => write!(f, "cannot check when facing a bet"),
+            Self::RaiseBelowMinRaise { min } => write!(f, "raise must reach at least {min}"),
+        }
+    }
+}
+
+impl std::error::Error for TransitionError {}
 
 impl GameState {
     pub fn step_with(&self, action: Action) -> Result<Self, TransitionError> {
@@ -43,15 +57,13 @@ fn apply_action(
         }
         Action::Check => {
             if subject.bet < mutation.current_bet {
-                return Err(TransitionError::IllegalAction {
-                    reason: "Cannot check when facing a bet",
-                });
+                return Err(TransitionError::CheckFacingBet);
             }
         }
         Action::Raise { to } => {
             if to < mutation.min_raise {
-                return Err(TransitionError::IllegalAction {
-                    reason: "Raise below the minimum",
+                return Err(TransitionError::RaiseBelowMinRaise {
+                    min: mutation.min_raise,
                 });
             }
 
@@ -265,7 +277,7 @@ mod tests {
 
         let result = state.step_with(Action::Check);
 
-        assert!(matches!(result, Err(TransitionError::IllegalAction { .. })));
+        assert!(matches!(result, Err(TransitionError::CheckFacingBet)));
     }
 
     #[test]
@@ -481,7 +493,10 @@ mod tests {
 
         let result = state.step_with(Action::Raise { to: 300 });
 
-        assert!(matches!(result, Err(TransitionError::IllegalAction { .. })));
+        assert!(matches!(
+            result,
+            Err(TransitionError::RaiseBelowMinRaise { min: 400 })
+        ));
     }
 
     #[test]

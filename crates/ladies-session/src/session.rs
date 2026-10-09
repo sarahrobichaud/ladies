@@ -1,6 +1,4 @@
-use ladies_sim::{
-    Action, Blinds, Chips, GameState, GameStateInitOptions, Seat, state::TransitionError,
-};
+use ladies_sim::{Action, Blinds, Chips, GameState, GameStateInitOptions, Seat, TransitionError};
 
 #[derive(Debug)]
 pub enum SessionError {
@@ -76,7 +74,7 @@ fn next_button(button: Seat, table_size: usize) -> Seat {
 
 #[cfg(test)]
 mod tests {
-    use ladies_sim::{Action, state::TransitionError::IllegalAction};
+    use ladies_sim::{Action, TransitionError};
 
     use super::*;
 
@@ -178,7 +176,7 @@ mod tests {
 
         assert!(matches!(
             result,
-            Err(SessionError::Game(IllegalAction { .. }))
+            Err(SessionError::Game(TransitionError::CheckFacingBet))
         ));
         assert!(session.hand().is_some(), "hand survives a rejected action");
     }
