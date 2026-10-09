@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use ladies_core::{Category, Hand, HandValue, Rank, decks::StandardDeck, evaluate};
+use ladies_core::{Category, Hand, HandValue, Rank, StandardDeck, evaluate};
 use rand::{SeedableRng, rngs::StdRng};
 
 /// Parses a hand from notation, for readable test tables.

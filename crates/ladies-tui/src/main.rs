@@ -1,4 +1,4 @@
-use ladies_core::decks::StandardDeck;
+use ladies_core::StandardDeck;
 
 fn main() {
     let mut deck = StandardDeck::new();

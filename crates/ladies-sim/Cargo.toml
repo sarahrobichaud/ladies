@@ -5,4 +5,4 @@ edition.workspace = true
 
 [dependencies]
 rand = { workspace = true }
-ladies-core = { version = "0.1.0", path = "../ladies-core" }
+ladies-core = { workspace = true }

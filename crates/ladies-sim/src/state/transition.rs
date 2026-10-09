@@ -1,13 +1,9 @@
 use std::fmt;
 
-use crate::state::Chips;
-use crate::state::Seat;
-use crate::state::Street;
-use crate::state::player::Status;
 use ladies_core::{Card, Hand, evaluate};
 
-use super::GameState;
-use super::action::Action;
+use super::{GameState, action::Action};
+use crate::state::{Chips, Seat, Street, player::Status};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransitionError {

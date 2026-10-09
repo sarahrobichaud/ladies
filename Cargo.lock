@@ -67,7 +67,6 @@ name = "ladies-tui"
 version = "0.1.0"
 dependencies = [
  "ladies-core",
- "rand",
 ]
 
 [[package]]

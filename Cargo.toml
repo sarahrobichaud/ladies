@@ -8,3 +8,5 @@ members = ["crates/*"]
 
 [workspace.dependencies]
 rand = "0.10.3"
+ladies-core = { path = "crates/ladies-core" }
+ladies-sim = { path = "crates/ladies-sim" }

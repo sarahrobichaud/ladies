@@ -6,10 +6,8 @@ use std::{
 pub mod ranks;
 pub mod suits;
 
-pub use crate::card::{
-    ranks::{Rank, RankParseErr},
-    suits::{Suit, SuitParseErr},
-};
+pub use ranks::{Rank, RankParseErr};
+pub use suits::{Suit, SuitParseErr};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct Card {
