@@ -69,6 +69,7 @@ fn apply_action(
 
             let added = to - subject.bet;
             subject.post(added);
+            mutation.min_raise = to + (to - mutation.current_bet);
             mutation.current_bet = to;
             reopens = true;
         }
@@ -128,6 +129,7 @@ fn advance_street(mutation: &mut GameState) {
     }
 
     mutation.current_bet = 0;
+    mutation.min_raise = mutation.blinds.big;
 
     let (dealt, next_street) = match mutation.street {
         Street::Preflop => (3, Street::Flop),
@@ -506,5 +508,37 @@ mod tests {
         let next = state.step_with(Action::Raise { to: 400 }).unwrap();
 
         assert_eq!(next.current_bet, 400);
+    }
+
+    #[test]
+    fn a_raise_updates_the_minimum_for_the_next_raise() {
+        let state = GameState::new(1, &[5000; 3], OPTIONS);
+        let state = state.step_with(Action::Raise { to: 600 }).unwrap();
+
+        assert_eq!(state.min_raise, 1000); // 600 + the 400 increment
+
+        let result = state.step_with(Action::Raise { to: 800 }); // below the new minimum
+
+        assert!(matches!(
+            result,
+            Err(TransitionError::RaiseBelowMinRaise { min: 1000 })
+        ));
+    }
+
+    #[test]
+    fn the_minimum_resets_at_each_street() {
+        let state = GameState::new(1, &[5000; 3], OPTIONS);
+        // preflop: raise to 600, called around — min_raise is 1000 going into the flop
+        let state = state.step_with(Action::Raise { to: 600 }).unwrap();
+        let state = state.step_with(Action::Call).unwrap(); // SB
+        let state = state.step_with(Action::Call).unwrap(); // BB — closes the round
+
+        assert_eq!(state.street, Street::Flop);
+        assert_eq!(state.min_raise, OPTIONS.blinds.big); // reset — a bet of 200 is legal again
+
+        let next = state.step_with(Action::Raise { to: 200 }).unwrap(); // SB bets the minimum
+
+        assert_eq!(next.current_bet, 200);
+        assert_eq!(next.min_raise, 400); // the update rule applies postflop too
     }
 }

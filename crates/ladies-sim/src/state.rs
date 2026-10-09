@@ -31,6 +31,7 @@ pub struct GameState {
     pub deck: Vec<Card>,
     pub current_bet: Chips,
     pub min_raise: Chips,
+    pub blinds: Blinds,
     pub positions: Positions,
     pub to_act: Seat,
 }
@@ -87,6 +88,7 @@ impl GameState {
             street: Street::Preflop,
             current_bet: players[bb_seat].bet,
             min_raise: options.blinds.big * 2,
+            blinds: options.blinds,
             board: Vec::with_capacity(5),
             deck: cards,
             positions: Positions {
