@@ -32,6 +32,8 @@ fn apply_action(
     let subject = &mut mutation.players[seat];
     let owed = mutation.current_bet - subject.bet;
 
+    let mut reopens = false;
+
     match action {
         Action::Fold => {
             subject.status = Status::Folded;
@@ -46,9 +48,30 @@ fn apply_action(
                 });
             }
         }
+        Action::Raise { to } => {
+            if to < mutation.min_raise {
+                return Err(TransitionError::IllegalAction {
+                    reason: "Raise below the minimum",
+                });
+            }
+
+            let added = to - subject.bet;
+            subject.post(added);
+            mutation.current_bet = to;
+            reopens = true;
+        }
     }
 
     subject.needs_action = false;
+
+    if reopens {
+        for (s, p) in &mut mutation.players.iter_mut().enumerate() {
+            if s != seat && p.can_play() {
+                p.needs_action = true
+            }
+        }
+    }
+
     Ok(mutation)
 }
 
@@ -420,5 +443,53 @@ mod tests {
         assert_eq!(state.players[1].stack, 4800);
         assert_eq!(state.players[2].stack, 4800);
         assert_eq!(state.pot(), 0);
+    }
+
+    #[test]
+    fn a_raise_sets_the_current_bet() {
+        let state = GameState::new(1, &[5000; 3], OPTIONS);
+        let utg = state.to_act;
+
+        let next = state.step_with(Action::Raise { to: 600 }).unwrap();
+
+        let raiser = &next.players[utg];
+        assert_eq!(raiser.bet, 600);
+        assert_eq!(raiser.stack, 5000 - 600);
+        assert_eq!(next.current_bet, 600);
+        assert!(!next.players[utg].needs_action);
+        assert_eq!(next.to_act, next.positions.sb); // action moves on
+    }
+
+    #[test]
+    fn a_raise_reopens_action_for_players_who_already_acted() {
+        let state = GameState::new(1, &[5000; 3], OPTIONS);
+        let state = state.step_with(Action::Call).unwrap(); // UTG — flag cleared
+        let state = state.step_with(Action::Call).unwrap(); // SB — flag cleared
+        let bb = state.positions.bb;
+
+        let next = state.step_with(Action::Raise { to: 600 }).unwrap();
+
+        assert!(next.players[0].needs_action); // UTG must respond to the raise
+        assert!(next.players[1].needs_action); // SB must respond to the raise
+        assert!(!next.players[bb].needs_action); // the raiser has acted
+        assert_eq!(next.current_bet, 600);
+    }
+
+    #[test]
+    fn a_raise_below_the_minimum_is_illegal() {
+        let state = GameState::new(1, &[5000; 3], OPTIONS); // min raise-to is 400
+
+        let result = state.step_with(Action::Raise { to: 300 });
+
+        assert!(matches!(result, Err(TransitionError::IllegalAction { .. })));
+    }
+
+    #[test]
+    fn a_raise_at_the_minimum_is_legal() {
+        let state = GameState::new(1, &[5000; 3], OPTIONS);
+
+        let next = state.step_with(Action::Raise { to: 400 }).unwrap();
+
+        assert_eq!(next.current_bet, 400);
     }
 }
