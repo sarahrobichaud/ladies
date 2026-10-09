@@ -1,3 +1,5 @@
+use ladies_core::Card;
+
 use crate::state::Chips;
 use crate::state::Seat;
 use crate::state::Street;
@@ -87,17 +89,17 @@ fn advance_street(mutation: &mut GameState) {
 
     mutation.current_bet = 0;
 
-    mutation.street = match mutation.street {
-        Street::Preflop => {
-            let flop: Vec<_> = mutation.deck.drain(..3).collect();
-            mutation.board.extend(flop);
-            Street::Flop
-        }
-        Street::Flop => todo!("turn"),
-        Street::Turn => todo!("river"),
+    let (dealt, next_street) = match mutation.street {
+        Street::Preflop => (3, Street::Flop),
+        Street::Flop => (1, Street::Turn),
+        Street::Turn => (1, Street::River),
         Street::River => todo!("showdown"),
         Street::Showdown | Street::Complete => todo!("showdown handling"),
     };
+
+    let cards: Vec<Card> = mutation.deck.drain(..dealt).collect();
+    mutation.board.extend(cards);
+    mutation.street = next_street;
 
     mutation.to_act = super::next_active_from(mutation.positions.button, &mutation.players);
     for p in &mut mutation.players {
@@ -122,6 +124,10 @@ fn award_pot(mutation: &mut GameState) {
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashSet;
+
+    use ladies_core::Card;
+
     use crate::{
         Street,
         state::{Blinds, GameState, GameStateInitOptions, TransitionError, action::Action},
@@ -210,6 +216,7 @@ mod tests {
 
         let next = state.step_with(Action::Call).unwrap();
 
+        assert_eq!(next.street, Street::Flop);
         assert_eq!(next.players[bb].committed, OPTIONS.blinds.big);
         assert_eq!(next.players[bb].stack, 5000 - OPTIONS.blinds.big);
     }
@@ -232,5 +239,46 @@ mod tests {
             assert_eq!(player.bet, 0); // bets swept
             assert_eq!(player.needs_action, player.can_play()); // fresh round
         }
+    }
+
+    #[test]
+    fn a_checked_around_hand_reaches_the_river() {
+        let state = GameState::new(1, &[5000; 3], OPTIONS);
+
+        // preflop: call, call, BB's check closes the round → flop
+        let state = state.step_with(Action::Call).unwrap();
+        let state = state.step_with(Action::Call).unwrap();
+        let state = state.step_with(Action::Check).unwrap();
+
+        assert_eq!(state.street, Street::Flop);
+        assert_eq!(state.board.len(), 3);
+        assert_eq!(state.to_act, state.positions.sb);
+
+        // flop: SB, BB, button all check → turn
+        let state = state.step_with(Action::Check).unwrap();
+        let state = state.step_with(Action::Check).unwrap();
+        let state = state.step_with(Action::Check).unwrap();
+
+        assert_eq!(state.street, Street::Turn);
+        assert_eq!(state.board.len(), 4);
+
+        // turn: all three check → river
+        let state = state.step_with(Action::Check).unwrap();
+        let state = state.step_with(Action::Check).unwrap();
+        let state = state.step_with(Action::Check).unwrap();
+
+        assert_eq!(state.street, Street::River);
+        assert_eq!(state.board.len(), 5);
+
+        let all: HashSet<Card> = state
+            .players
+            .iter()
+            .flat_map(|p| p.hole)
+            .chain(state.board.iter().copied())
+            .chain(state.deck.iter().copied())
+            .collect();
+
+        assert_eq!(all.len(), 52);
+        assert_eq!(state.deck.len(), 41); // 52 − 6 holes − 5 board
     }
 }
