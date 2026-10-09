@@ -1,17 +1,17 @@
-use ladies_sim::{Action, Blinds, Chips, GameState, GameStateInitOptions, Seat, TransitionError};
+use ladies_sim::{Action, Blinds, Chips, HandOptions, HandState, IllegalAction, Seat};
 
 #[derive(Debug)]
 pub enum SessionError {
     NoHandInProgress,
     HandInProgress,
-    Game(TransitionError),
+    Action(IllegalAction),
 }
 
 pub struct Session {
     button: Seat,
     blinds: Blinds,
     stacks: Vec<Chips>,
-    hand: Option<GameState>,
+    hand: Option<HandState>,
 }
 
 impl Session {
@@ -29,12 +29,12 @@ impl Session {
             return Err(SessionError::HandInProgress);
         }
 
-        let options = GameStateInitOptions {
+        let options = HandOptions {
             blinds: self.blinds,
             button: self.button,
         };
 
-        let state = GameState::new(seed, &self.stacks, options);
+        let state = HandState::new(seed, &self.stacks, options);
 
         self.hand = Some(state);
         Ok(())
@@ -45,8 +45,8 @@ impl Session {
             .hand
             .as_ref()
             .ok_or(SessionError::NoHandInProgress)?
-            .step_with(action)
-            .map_err(SessionError::Game)?;
+            .apply(action)
+            .map_err(SessionError::Action)?;
 
         if next.is_hand_over() {
             self.stacks = next.stacks();
@@ -59,7 +59,7 @@ impl Session {
         Ok(())
     }
 
-    pub fn hand(&self) -> Option<&GameState> {
+    pub fn hand(&self) -> Option<&HandState> {
         self.hand.as_ref()
     }
 
@@ -74,7 +74,7 @@ fn next_button(button: Seat, table_size: usize) -> Seat {
 
 #[cfg(test)]
 mod tests {
-    use ladies_sim::{Action, TransitionError};
+    use ladies_sim::{Action, IllegalAction};
 
     use super::*;
 
@@ -176,7 +176,7 @@ mod tests {
 
         assert!(matches!(
             result,
-            Err(SessionError::Game(TransitionError::CheckFacingBet))
+            Err(SessionError::Action(IllegalAction::CheckFacingBet))
         ));
         assert!(session.hand().is_some(), "hand survives a rejected action");
     }

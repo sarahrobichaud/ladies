@@ -3,7 +3,7 @@ use rand::{SeedableRng, rngs::StdRng};
 
 pub use blinds::Blinds;
 pub use player::Player;
-pub use transition::{Action, Street, TransitionError};
+pub use transition::{Action, IllegalAction, Street};
 
 mod blinds;
 mod player;
@@ -20,7 +20,7 @@ pub struct Positions {
 }
 
 #[derive(Clone)]
-pub struct GameState {
+pub struct HandState {
     pub players: Vec<Player>,
     pub street: Street,
     pub board: Vec<Card>,
@@ -32,13 +32,13 @@ pub struct GameState {
     pub to_act: Seat,
 }
 
-pub struct GameStateInitOptions {
+pub struct HandOptions {
     pub button: Seat,
     pub blinds: Blinds,
 }
 
-impl GameState {
-    pub fn new(seed: u64, stacks: &[Chips], options: GameStateInitOptions) -> Self {
+impl HandState {
+    pub fn new(seed: u64, stacks: &[Chips], options: HandOptions) -> Self {
         let mut deck = StandardDeck::new();
         deck.shuffle(&mut StdRng::seed_from_u64(seed));
 
@@ -51,11 +51,7 @@ impl GameState {
     }
 
     /// Exists so tests can rig hands deterministically.
-    pub(crate) fn from_deck(
-        cards: Vec<Card>,
-        stacks: &[Chips],
-        options: GameStateInitOptions,
-    ) -> Self {
+    pub(crate) fn from_deck(cards: Vec<Card>, stacks: &[Chips], options: HandOptions) -> Self {
         let mut cards = cards;
         let holes: Vec<[Card; 2]> = (0..stacks.len())
             .map(|_| {
@@ -150,7 +146,7 @@ mod tests {
     use ladies_core::Card;
 
     use crate::state::{
-        Blinds, Chips, GameState, GameStateInitOptions, Player, Seat, next_active_from, next_seat,
+        Blinds, Chips, HandOptions, HandState, Player, Seat, next_active_from, next_seat,
         player::Status,
     };
 
@@ -171,15 +167,15 @@ mod tests {
         }
     }
 
-    const OPTIONS: GameStateInitOptions = GameStateInitOptions {
+    const OPTIONS: HandOptions = HandOptions {
         button: 0,
         blinds: Blinds {
             small: 100,
             big: 200,
         },
     };
-    fn with_button(button: Seat) -> GameStateInitOptions {
-        GameStateInitOptions { button, ..OPTIONS }
+    fn with_button(button: Seat) -> HandOptions {
+        HandOptions { button, ..OPTIONS }
     }
 
     #[test]
@@ -211,12 +207,12 @@ mod tests {
     fn same_seed_deals_the_same_cards() {
         let seed = 1;
 
-        let state = GameState::new(seed, &stacks::<2>(), OPTIONS);
+        let state = HandState::new(seed, &stacks::<2>(), OPTIONS);
 
         let p1 = state.players[0].hole;
         let p2 = state.players[1].hole;
 
-        let state = GameState::new(seed, &stacks::<2>(), OPTIONS);
+        let state = HandState::new(seed, &stacks::<2>(), OPTIONS);
 
         assert_eq!(p1, state.players[0].hole);
         assert_eq!(p2, state.players[1].hole);
@@ -224,30 +220,30 @@ mod tests {
 
     #[test]
     fn preflop_first_to_act_is_sb_in_heads_up() {
-        let state = GameState::new(0, &stacks::<2>(), OPTIONS);
+        let state = HandState::new(0, &stacks::<2>(), OPTIONS);
         assert_eq!(state.to_act, state.positions.sb);
 
-        let state = GameState::new(1, &stacks::<2>(), OPTIONS);
+        let state = HandState::new(1, &stacks::<2>(), OPTIONS);
         assert_eq!(state.to_act, state.positions.sb);
     }
 
     #[test]
     fn preflop_first_to_act_is_left_of_bb_in_multiway() {
-        let state = GameState::new(0, &stacks::<3>(), OPTIONS);
+        let state = HandState::new(0, &stacks::<3>(), OPTIONS);
 
         assert_eq!(
             state.to_act,
             next_seat(state.positions.bb, state.players.len())
         );
 
-        let state = GameState::new(1, &stacks::<3>(), OPTIONS);
+        let state = HandState::new(1, &stacks::<3>(), OPTIONS);
 
         assert_eq!(
             state.to_act,
             next_seat(state.positions.bb, state.players.len())
         );
 
-        let state = GameState::new(2, &stacks::<3>(), OPTIONS);
+        let state = HandState::new(2, &stacks::<3>(), OPTIONS);
 
         assert_eq!(
             state.to_act,
@@ -257,12 +253,12 @@ mod tests {
 
     #[test]
     fn assigns_blind_seats_correctly_in_heads_up() {
-        let state = GameState::new(0, &stacks::<2>(), with_button(0));
+        let state = HandState::new(0, &stacks::<2>(), with_button(0));
 
         assert_eq!(state.positions.sb, 0);
         assert_eq!(state.positions.bb, 1);
 
-        let state = GameState::new(0, &stacks::<2>(), with_button(1));
+        let state = HandState::new(0, &stacks::<2>(), with_button(1));
 
         assert_eq!(state.positions.sb, 1);
         assert_eq!(state.positions.bb, 0);
@@ -270,12 +266,12 @@ mod tests {
 
     #[test]
     fn assigns_blind_seats_correctly_in_multiway() {
-        let state = GameState::new(1, &stacks::<3>(), with_button(0));
+        let state = HandState::new(1, &stacks::<3>(), with_button(0));
 
         assert_eq!(state.positions.sb, 1);
         assert_eq!(state.positions.bb, 2);
 
-        let state = GameState::new(1, &stacks::<3>(), with_button(1));
+        let state = HandState::new(1, &stacks::<3>(), with_button(1));
 
         assert_eq!(state.positions.sb, 2);
         assert_eq!(state.positions.bb, 0);
@@ -283,12 +279,12 @@ mod tests {
 
     #[test]
     fn different_seed_deals_different_cards() {
-        let state = GameState::new(1, &stacks::<2>(), OPTIONS);
+        let state = HandState::new(1, &stacks::<2>(), OPTIONS);
 
         let p1 = state.players[0].hole;
         let p2 = state.players[1].hole;
 
-        let state = GameState::new(2, &stacks::<2>(), OPTIONS);
+        let state = HandState::new(2, &stacks::<2>(), OPTIONS);
 
         assert_ne!(p1, state.players[0].hole);
         assert_ne!(p2, state.players[1].hole);
@@ -297,7 +293,7 @@ mod tests {
     #[test]
     fn short_stack_posts_all_in_from_the_blind() {
         // seat 1 is SB with 50 < small blind 100
-        let state = GameState::new(1, &[5000, 50, 5000], OPTIONS);
+        let state = HandState::new(1, &[5000, 50, 5000], OPTIONS);
 
         let sb = &state.players[1];
         assert_eq!(sb.bet, 50);
@@ -310,7 +306,7 @@ mod tests {
 
     #[test]
     fn heads_up_games_post_blind_from_button() {
-        let state = GameState::new(1, &stacks::<2>(), OPTIONS);
+        let state = HandState::new(1, &stacks::<2>(), OPTIONS);
         let bb = &state.players[state.positions.bb];
 
         assert_eq!(state.positions.bb, state.positions.button + 1);
@@ -329,7 +325,7 @@ mod tests {
 
     #[test]
     fn multiway_games_post_blinds_after_the_button() {
-        let state = GameState::new(1, &stacks::<3>(), OPTIONS);
+        let state = HandState::new(1, &stacks::<3>(), OPTIONS);
 
         assert_eq!(state.positions.bb, state.positions.sb + 1);
         assert_eq!(state.positions.sb, state.positions.button + 1);
@@ -342,7 +338,7 @@ mod tests {
 
     #[test]
     fn dealing_consumes_cards_from_the_deck() {
-        let state = GameState::new(1, &stacks::<2>(), OPTIONS);
+        let state = HandState::new(1, &stacks::<2>(), OPTIONS);
 
         assert_eq!(state.deck.len(), 48);
 
@@ -357,7 +353,7 @@ mod tests {
 
         assert!(state.board.is_empty());
 
-        let state = GameState::new(1, &stacks::<3>(), OPTIONS);
+        let state = HandState::new(1, &stacks::<3>(), OPTIONS);
 
         assert_eq!(state.deck.len(), 46);
 
@@ -374,14 +370,14 @@ mod tests {
 
     #[test]
     fn current_bet_is_correct_after_blinds() {
-        let state = GameState::new(0, &stacks::<2>(), OPTIONS);
+        let state = HandState::new(0, &stacks::<2>(), OPTIONS);
 
         assert_eq!(state.current_bet, OPTIONS.blinds.big);
     }
 
     #[test]
     fn active_players_start_needing_action() {
-        let state = GameState::new(1, &stacks::<3>(), OPTIONS);
+        let state = HandState::new(1, &stacks::<3>(), OPTIONS);
 
         for player in &state.players {
             assert_eq!(player.needs_action, player.can_play());

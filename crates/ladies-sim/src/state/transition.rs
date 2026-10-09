@@ -2,7 +2,7 @@ use std::fmt;
 
 use ladies_core::{Card, Hand, evaluate};
 
-use super::GameState;
+use super::HandState;
 use crate::state::{Chips, Seat, player::Status};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -24,12 +24,12 @@ pub enum Street {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum TransitionError {
+pub enum IllegalAction {
     CheckFacingBet,
     RaiseBelowMinRaise { min: Chips },
 }
 
-impl fmt::Display for TransitionError {
+impl fmt::Display for IllegalAction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::CheckFacingBet => write!(f, "cannot check when facing a bet"),
@@ -38,10 +38,10 @@ impl fmt::Display for TransitionError {
     }
 }
 
-impl std::error::Error for TransitionError {}
+impl std::error::Error for IllegalAction {}
 
-impl GameState {
-    pub fn step_with(&self, action: Action) -> Result<Self, TransitionError> {
+impl HandState {
+    pub fn apply(&self, action: Action) -> Result<Self, IllegalAction> {
         let mut next = self.clone();
         let seat = next.to_act;
 
@@ -53,10 +53,10 @@ impl GameState {
 }
 
 fn apply_action(
-    mutation: &mut GameState,
+    mutation: &mut HandState,
     seat: Seat,
     action: Action,
-) -> Result<&GameState, TransitionError> {
+) -> Result<&HandState, IllegalAction> {
     let subject = &mut mutation.players[seat];
     let owed = mutation.current_bet - subject.bet;
 
@@ -71,12 +71,12 @@ fn apply_action(
         }
         Action::Check => {
             if subject.bet < mutation.current_bet {
-                return Err(TransitionError::CheckFacingBet);
+                return Err(IllegalAction::CheckFacingBet);
             }
         }
         Action::Raise { to } => {
             if to < mutation.min_raise {
-                return Err(TransitionError::RaiseBelowMinRaise {
+                return Err(IllegalAction::RaiseBelowMinRaise {
                     min: mutation.min_raise,
                 });
             }
@@ -102,7 +102,7 @@ fn apply_action(
     Ok(mutation)
 }
 
-fn advance_turn(mutation: &mut GameState, seat: Seat) -> Result<&GameState, TransitionError> {
+fn advance_turn(mutation: &mut HandState, seat: Seat) -> Result<&HandState, IllegalAction> {
     mutation.to_act = super::next_active_from(seat, &mutation.players);
 
     if is_fold_win(mutation) {
@@ -115,11 +115,11 @@ fn advance_turn(mutation: &mut GameState, seat: Seat) -> Result<&GameState, Tran
     Ok(mutation)
 }
 
-fn is_fold_win(state: &GameState) -> bool {
+fn is_fold_win(state: &HandState) -> bool {
     state.players.iter().filter(|p| p.can_play()).count() == 1
 }
 
-fn is_round_closed(state: &GameState) -> bool {
+fn is_round_closed(state: &HandState) -> bool {
     if !state.players.iter().any(|p| p.can_play()) {
         todo!("Implement all-in runout");
     }
@@ -131,7 +131,7 @@ fn is_round_closed(state: &GameState) -> bool {
         .all(|p| !p.needs_action)
 }
 
-fn advance_street(mutation: &mut GameState) {
+fn advance_street(mutation: &mut HandState) {
     if mutation.street == Street::River {
         award_showdown(mutation);
         mutation.street = Street::Complete;
@@ -164,7 +164,7 @@ fn advance_street(mutation: &mut GameState) {
     }
 }
 
-fn award_showdown(mutation: &mut GameState) {
+fn award_showdown(mutation: &mut HandState) {
     let pot: Chips = mutation.players.iter().map(|p| p.committed).sum();
 
     let mut winner: Option<(Seat, ladies_core::HandValue)> = None;
@@ -196,7 +196,7 @@ fn award_showdown(mutation: &mut GameState) {
     }
 }
 
-fn award_pot(mutation: &mut GameState) {
+fn award_pot(mutation: &mut HandState) {
     let pot: Chips = mutation.players.iter().map(|p| p.committed).sum();
     let winner = mutation
         .players
@@ -217,10 +217,10 @@ mod tests {
 
     use ladies_core::Card;
 
-    use super::{Action, Street, TransitionError};
-    use crate::state::{Blinds, GameState, GameStateInitOptions};
+    use super::{Action, IllegalAction, Street};
+    use crate::state::{Blinds, HandOptions, HandState};
 
-    const OPTIONS: GameStateInitOptions = GameStateInitOptions {
+    const OPTIONS: HandOptions = HandOptions {
         button: 0,
         blinds: Blinds {
             small: 100,
@@ -230,10 +230,10 @@ mod tests {
 
     #[test]
     fn fold_puts_a_player_out_of_play() {
-        let state = GameState::new(1, &[5000; 3], OPTIONS);
+        let state = HandState::new(1, &[5000; 3], OPTIONS);
         let utg = state.to_act;
 
-        let next = state.step_with(Action::Fold).unwrap();
+        let next = state.apply(Action::Fold).unwrap();
 
         assert!(!next.players[utg].can_play());
         assert!(!next.players[utg].needs_action);
@@ -241,29 +241,29 @@ mod tests {
 
     #[test]
     fn fold_passes_action_to_the_next_player() {
-        let state = GameState::new(1, &[5000; 3], OPTIONS);
+        let state = HandState::new(1, &[5000; 3], OPTIONS);
 
-        let next = state.step_with(Action::Fold).unwrap();
+        let next = state.apply(Action::Fold).unwrap();
 
         assert_eq!(next.to_act, state.positions.sb);
     }
 
     #[test]
     fn folding_around_ends_the_hand() {
-        let state = GameState::new(1, &[5000; 3], OPTIONS);
+        let state = HandState::new(1, &[5000; 3], OPTIONS);
 
-        let state = state.step_with(Action::Fold).unwrap();
-        let state = state.step_with(Action::Fold).unwrap();
+        let state = state.apply(Action::Fold).unwrap();
+        let state = state.apply(Action::Fold).unwrap();
 
         assert!(state.is_hand_over())
     }
 
     #[test]
     fn last_player_standing_wins_the_pot() {
-        let state = GameState::new(1, &[5000; 3], OPTIONS);
+        let state = HandState::new(1, &[5000; 3], OPTIONS);
 
-        let state = state.step_with(Action::Fold).unwrap(); // UTG
-        let state = state.step_with(Action::Fold).unwrap(); // SB
+        let state = state.apply(Action::Fold).unwrap(); // UTG
+        let state = state.apply(Action::Fold).unwrap(); // SB
 
         let bb = state.positions.bb;
 
@@ -273,10 +273,10 @@ mod tests {
 
     #[test]
     fn a_call_matches_the_current_bet() {
-        let state = GameState::new(1, &[5000; 3], OPTIONS);
+        let state = HandState::new(1, &[5000; 3], OPTIONS);
         let utg = state.to_act;
 
-        let next = state.step_with(Action::Call).unwrap();
+        let next = state.apply(Action::Call).unwrap();
 
         let caller = &next.players[utg];
         assert_eq!(caller.bet, OPTIONS.blinds.big); // matched the BB's 200
@@ -287,21 +287,21 @@ mod tests {
 
     #[test]
     fn checking_when_facing_a_bet_is_illegal() {
-        let state = GameState::new(1, &[5000; 3], OPTIONS); // UTG faces the BB's 200
+        let state = HandState::new(1, &[5000; 3], OPTIONS); // UTG faces the BB's 200
 
-        let result = state.step_with(Action::Check);
+        let result = state.apply(Action::Check);
 
-        assert!(matches!(result, Err(TransitionError::CheckFacingBet)));
+        assert!(matches!(result, Err(IllegalAction::CheckFacingBet)));
     }
 
     #[test]
     fn a_call_when_owing_nothing_bets_nothing() {
-        let state = GameState::new(1, &[5000; 3], OPTIONS);
-        let state = state.step_with(Action::Call).unwrap(); // UTG calls (owed 200)
-        let state = state.step_with(Action::Call).unwrap(); // SB calls (owed 100)
+        let state = HandState::new(1, &[5000; 3], OPTIONS);
+        let state = state.apply(Action::Call).unwrap(); // UTG calls (owed 200)
+        let state = state.apply(Action::Call).unwrap(); // SB calls (owed 100)
         let bb = state.positions.bb;
 
-        let next = state.step_with(Action::Call).unwrap();
+        let next = state.apply(Action::Call).unwrap();
 
         assert_eq!(next.street, Street::Flop);
         assert_eq!(next.players[bb].committed, OPTIONS.blinds.big);
@@ -310,11 +310,11 @@ mod tests {
 
     #[test]
     fn the_bb_option_closes_the_preflop_round() {
-        let state = GameState::new(1, &[5000; 3], OPTIONS);
-        let state = state.step_with(Action::Call).unwrap(); // UTG
-        let state = state.step_with(Action::Call).unwrap(); // SB
+        let state = HandState::new(1, &[5000; 3], OPTIONS);
+        let state = state.apply(Action::Call).unwrap(); // UTG
+        let state = state.apply(Action::Call).unwrap(); // SB
 
-        let next = state.step_with(Action::Check).unwrap(); // BB's option closes the round
+        let next = state.apply(Action::Check).unwrap(); // BB's option closes the round
 
         assert_eq!(next.street, Street::Flop);
         assert_eq!(next.board.len(), 3);
@@ -330,29 +330,29 @@ mod tests {
 
     #[test]
     fn a_checked_around_hand_reaches_the_river() {
-        let state = GameState::new(1, &[5000; 3], OPTIONS);
+        let state = HandState::new(1, &[5000; 3], OPTIONS);
 
         // preflop: call, call, BB's check closes the round → flop
-        let state = state.step_with(Action::Call).unwrap();
-        let state = state.step_with(Action::Call).unwrap();
-        let state = state.step_with(Action::Check).unwrap();
+        let state = state.apply(Action::Call).unwrap();
+        let state = state.apply(Action::Call).unwrap();
+        let state = state.apply(Action::Check).unwrap();
 
         assert_eq!(state.street, Street::Flop);
         assert_eq!(state.board.len(), 3);
         assert_eq!(state.to_act, state.positions.sb);
 
         // flop: SB, BB, button all check → turn
-        let state = state.step_with(Action::Check).unwrap();
-        let state = state.step_with(Action::Check).unwrap();
-        let state = state.step_with(Action::Check).unwrap();
+        let state = state.apply(Action::Check).unwrap();
+        let state = state.apply(Action::Check).unwrap();
+        let state = state.apply(Action::Check).unwrap();
 
         assert_eq!(state.street, Street::Turn);
         assert_eq!(state.board.len(), 4);
 
         // turn: all three check → river
-        let state = state.step_with(Action::Check).unwrap();
-        let state = state.step_with(Action::Check).unwrap();
-        let state = state.step_with(Action::Check).unwrap();
+        let state = state.apply(Action::Check).unwrap();
+        let state = state.apply(Action::Check).unwrap();
+        let state = state.apply(Action::Check).unwrap();
 
         assert_eq!(state.street, Street::River);
         assert_eq!(state.board.len(), 5);
@@ -376,18 +376,18 @@ mod tests {
 
     /// Plays a checked-around hand up to the river: preflop call-call-check,
     /// then three checks per street. The river round is left open.
-    fn walk_to_river(state: &GameState) -> GameState {
-        let state = state.step_with(Action::Call).unwrap(); // UTG
-        let state = state.step_with(Action::Call).unwrap(); // SB
-        let state = state.step_with(Action::Check).unwrap(); // BB — flop
+    fn walk_to_river(state: &HandState) -> HandState {
+        let state = state.apply(Action::Call).unwrap(); // UTG
+        let state = state.apply(Action::Call).unwrap(); // SB
+        let state = state.apply(Action::Check).unwrap(); // BB — flop
 
-        let state = state.step_with(Action::Check).unwrap(); // SB
-        let state = state.step_with(Action::Check).unwrap(); // BB
-        let state = state.step_with(Action::Check).unwrap(); // button — turn
+        let state = state.apply(Action::Check).unwrap(); // SB
+        let state = state.apply(Action::Check).unwrap(); // BB
+        let state = state.apply(Action::Check).unwrap(); // button — turn
 
-        let state = state.step_with(Action::Check).unwrap(); // SB
-        let state = state.step_with(Action::Check).unwrap(); // BB
-        state.step_with(Action::Check).unwrap()
+        let state = state.apply(Action::Check).unwrap(); // SB
+        let state = state.apply(Action::Check).unwrap(); // BB
+        state.apply(Action::Check).unwrap()
     }
 
     /// Aces, kings, queens in seat order, then a junk board — seat 0 wins
@@ -409,12 +409,12 @@ mod tests {
 
     #[test]
     fn the_best_hand_wins_at_showdown() {
-        let state = GameState::from_deck(rigged_deck(), &[5000; 3], OPTIONS);
+        let state = HandState::from_deck(rigged_deck(), &[5000; 3], OPTIONS);
         let state = walk_to_river(&state);
 
-        let state = state.step_with(Action::Check).unwrap();
-        let state = state.step_with(Action::Check).unwrap();
-        let next = state.step_with(Action::Check).unwrap();
+        let state = state.apply(Action::Check).unwrap();
+        let state = state.apply(Action::Check).unwrap();
+        let next = state.apply(Action::Check).unwrap();
 
         assert_eq!(next.street, Street::Complete);
         assert!(next.is_hand_over());
@@ -426,12 +426,12 @@ mod tests {
 
     #[test]
     fn a_folded_player_is_excluded_from_showdown() {
-        let state = GameState::from_deck(rigged_deck(), &[5000; 3], OPTIONS);
+        let state = HandState::from_deck(rigged_deck(), &[5000; 3], OPTIONS);
         let state = walk_to_river(&state);
 
-        let state = state.step_with(Action::Check).unwrap();
-        let state = state.step_with(Action::Check).unwrap();
-        let next = state.step_with(Action::Fold).unwrap();
+        let state = state.apply(Action::Check).unwrap();
+        let state = state.apply(Action::Check).unwrap();
+        let next = state.apply(Action::Fold).unwrap();
 
         assert_eq!(next.street, Street::Complete);
         assert!(next.is_hand_over());
@@ -444,24 +444,24 @@ mod tests {
     #[test]
     fn an_all_in_player_still_shows_down() {
         // seat 0 holds the aces with exactly the BB's 200, so no sidepot
-        let state = GameState::from_deck(rigged_deck(), &[200, 5000, 5000], OPTIONS);
+        let state = HandState::from_deck(rigged_deck(), &[200, 5000, 5000], OPTIONS);
 
-        let state = state.step_with(Action::Call).unwrap();
+        let state = state.apply(Action::Call).unwrap();
         assert!(!state.players[0].can_play()); // can't act anymore
         assert!(state.players[0].can_win_pot()); // but still eligible to win
 
-        let state = state.step_with(Action::Call).unwrap(); // SB
-        let state = state.step_with(Action::Check).unwrap(); // BB — flop
+        let state = state.apply(Action::Call).unwrap(); // SB
+        let state = state.apply(Action::Check).unwrap(); // BB — flop
 
         // flop, turn, river: SB and BB check around; the all-in player sits out
-        let state = state.step_with(Action::Check).unwrap();
-        let state = state.step_with(Action::Check).unwrap(); // → turn
+        let state = state.apply(Action::Check).unwrap();
+        let state = state.apply(Action::Check).unwrap(); // → turn
 
-        let state = state.step_with(Action::Check).unwrap();
-        let state = state.step_with(Action::Check).unwrap(); // → river
+        let state = state.apply(Action::Check).unwrap();
+        let state = state.apply(Action::Check).unwrap(); // → river
 
-        let state = state.step_with(Action::Check).unwrap();
-        let state = state.step_with(Action::Check).unwrap(); // → showdown
+        let state = state.apply(Action::Check).unwrap();
+        let state = state.apply(Action::Check).unwrap(); // → showdown
 
         assert_eq!(state.street, Street::Complete);
         assert!(state.is_hand_over());
@@ -473,10 +473,10 @@ mod tests {
 
     #[test]
     fn a_raise_sets_the_current_bet() {
-        let state = GameState::new(1, &[5000; 3], OPTIONS);
+        let state = HandState::new(1, &[5000; 3], OPTIONS);
         let utg = state.to_act;
 
-        let next = state.step_with(Action::Raise { to: 600 }).unwrap();
+        let next = state.apply(Action::Raise { to: 600 }).unwrap();
 
         let raiser = &next.players[utg];
         assert_eq!(raiser.bet, 600);
@@ -488,12 +488,12 @@ mod tests {
 
     #[test]
     fn a_raise_reopens_action_for_players_who_already_acted() {
-        let state = GameState::new(1, &[5000; 3], OPTIONS);
-        let state = state.step_with(Action::Call).unwrap(); // UTG — flag cleared
-        let state = state.step_with(Action::Call).unwrap(); // SB — flag cleared
+        let state = HandState::new(1, &[5000; 3], OPTIONS);
+        let state = state.apply(Action::Call).unwrap(); // UTG — flag cleared
+        let state = state.apply(Action::Call).unwrap(); // SB — flag cleared
         let bb = state.positions.bb;
 
-        let next = state.step_with(Action::Raise { to: 600 }).unwrap();
+        let next = state.apply(Action::Raise { to: 600 }).unwrap();
 
         assert!(next.players[0].needs_action); // UTG must respond to the raise
         assert!(next.players[1].needs_action); // SB must respond to the raise
@@ -503,52 +503,52 @@ mod tests {
 
     #[test]
     fn a_raise_below_the_minimum_is_illegal() {
-        let state = GameState::new(1, &[5000; 3], OPTIONS); // min raise-to is 400
+        let state = HandState::new(1, &[5000; 3], OPTIONS); // min raise-to is 400
 
-        let result = state.step_with(Action::Raise { to: 300 });
+        let result = state.apply(Action::Raise { to: 300 });
 
         assert!(matches!(
             result,
-            Err(TransitionError::RaiseBelowMinRaise { min: 400 })
+            Err(IllegalAction::RaiseBelowMinRaise { min: 400 })
         ));
     }
 
     #[test]
     fn a_raise_at_the_minimum_is_legal() {
-        let state = GameState::new(1, &[5000; 3], OPTIONS);
+        let state = HandState::new(1, &[5000; 3], OPTIONS);
 
-        let next = state.step_with(Action::Raise { to: 400 }).unwrap();
+        let next = state.apply(Action::Raise { to: 400 }).unwrap();
 
         assert_eq!(next.current_bet, 400);
     }
 
     #[test]
     fn a_raise_updates_the_minimum_for_the_next_raise() {
-        let state = GameState::new(1, &[5000; 3], OPTIONS);
-        let state = state.step_with(Action::Raise { to: 600 }).unwrap();
+        let state = HandState::new(1, &[5000; 3], OPTIONS);
+        let state = state.apply(Action::Raise { to: 600 }).unwrap();
 
         assert_eq!(state.min_raise, 1000); // 600 + the 400 increment
 
-        let result = state.step_with(Action::Raise { to: 800 }); // below the new minimum
+        let result = state.apply(Action::Raise { to: 800 }); // below the new minimum
 
         assert!(matches!(
             result,
-            Err(TransitionError::RaiseBelowMinRaise { min: 1000 })
+            Err(IllegalAction::RaiseBelowMinRaise { min: 1000 })
         ));
     }
 
     #[test]
     fn the_minimum_resets_at_each_street() {
-        let state = GameState::new(1, &[5000; 3], OPTIONS);
+        let state = HandState::new(1, &[5000; 3], OPTIONS);
         // preflop: raise to 600, called around — min_raise is 1000 going into the flop
-        let state = state.step_with(Action::Raise { to: 600 }).unwrap();
-        let state = state.step_with(Action::Call).unwrap(); // SB
-        let state = state.step_with(Action::Call).unwrap(); // BB — closes the round
+        let state = state.apply(Action::Raise { to: 600 }).unwrap();
+        let state = state.apply(Action::Call).unwrap(); // SB
+        let state = state.apply(Action::Call).unwrap(); // BB — closes the round
 
         assert_eq!(state.street, Street::Flop);
         assert_eq!(state.min_raise, OPTIONS.blinds.big); // reset — a bet of 200 is legal again
 
-        let next = state.step_with(Action::Raise { to: 200 }).unwrap(); // SB bets the minimum
+        let next = state.apply(Action::Raise { to: 200 }).unwrap(); // SB bets the minimum
 
         assert_eq!(next.current_bet, 200);
         assert_eq!(next.min_raise, 400); // the update rule applies postflop too
