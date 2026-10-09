@@ -222,7 +222,7 @@ mod tests {
         assert_eq!(deck.deal_n::<3>(), None);
         assert_eq!(deck.remaining(), 2, "failed deal must not consume cards");
 
-        assert_eq!(deck.deal_n::<2>().is_some(), true);
+        assert!(deck.deal_n::<2>().is_some());
         assert_eq!(deck.remaining(), 0);
     }
 

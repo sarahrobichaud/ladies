@@ -391,4 +391,34 @@ mod tests {
         assert_eq!(next.players[2].stack, 4800);
         assert_eq!(next.pot(), 0);
     }
+
+    #[test]
+    fn an_all_in_player_still_shows_down() {
+        // seat 0 holds the aces with exactly the BB's 200, so no sidepot
+        let state = GameState::from_deck(rigged_deck(), &[200, 5000, 5000], OPTIONS);
+
+        let state = state.step_with(Action::Call).unwrap();
+        assert!(!state.players[0].can_play()); // can't act anymore
+        assert!(state.players[0].can_win_pot()); // but still eligible to win
+
+        let state = state.step_with(Action::Call).unwrap(); // SB
+        let state = state.step_with(Action::Check).unwrap(); // BB — flop
+
+        // flop, turn, river: SB and BB check around; the all-in player sits out
+        let state = state.step_with(Action::Check).unwrap();
+        let state = state.step_with(Action::Check).unwrap(); // → turn
+
+        let state = state.step_with(Action::Check).unwrap();
+        let state = state.step_with(Action::Check).unwrap(); // → river
+
+        let state = state.step_with(Action::Check).unwrap();
+        let state = state.step_with(Action::Check).unwrap(); // → showdown
+
+        assert_eq!(state.street, Street::Complete);
+        assert!(state.is_hand_over());
+        assert_eq!(state.players[0].stack, 600); // aces win the whole pot — all-in for exactly
+        assert_eq!(state.players[1].stack, 4800);
+        assert_eq!(state.players[2].stack, 4800);
+        assert_eq!(state.pot(), 0);
+    }
 }
