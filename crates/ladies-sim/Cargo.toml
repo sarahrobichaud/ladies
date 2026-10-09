@@ -1,5 +1,5 @@
 [package]
-name = "ladies-engine"
+name = "ladies-sim"
 version.workspace = true
 edition.workspace = true
 

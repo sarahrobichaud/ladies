@@ -1,5 +1,5 @@
-use ladies_driver::Session;
-use ladies_engine::{Action, Blinds};
+use ladies_session::Session;
+use ladies_sim::{Action, Blinds};
 
 fn fold_around(session: &mut Session) {
     session.act(Action::Fold).expect("fold accepted"); // UTG

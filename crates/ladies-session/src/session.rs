@@ -1,4 +1,4 @@
-use ladies_engine::{
+use ladies_sim::{
     Action, Blinds, Chips, GameState, GameStateInitOptions, Seat, state::TransitionError,
 };
 
@@ -76,7 +76,7 @@ fn next_button(button: Seat, table_size: usize) -> Seat {
 
 #[cfg(test)]
 mod tests {
-    use ladies_engine::{Action, state::TransitionError::IllegalAction};
+    use ladies_sim::{Action, state::TransitionError::IllegalAction};
 
     use super::*;
 

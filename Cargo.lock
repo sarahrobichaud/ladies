@@ -48,14 +48,14 @@ dependencies = [
 ]
 
 [[package]]
-name = "ladies-driver"
+name = "ladies-session"
 version = "0.1.0"
 dependencies = [
- "ladies-engine",
+ "ladies-sim",
 ]
 
 [[package]]
-name = "ladies-engine"
+name = "ladies-sim"
 version = "0.1.0"
 dependencies = [
  "ladies-core",

@@ -1,0 +1,7 @@
+[package]
+name = "ladies-session"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+ladies-sim = { version = "0.1.0", path = "../ladies-sim" }
