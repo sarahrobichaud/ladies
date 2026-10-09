@@ -2,8 +2,26 @@ use std::fmt;
 
 use ladies_core::{Card, Hand, evaluate};
 
-use super::{GameState, action::Action};
-use crate::state::{Chips, Seat, Street, player::Status};
+use super::GameState;
+use crate::state::{Chips, Seat, player::Status};
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Action {
+    Fold,
+    Call,
+    Check,
+    Raise { to: Chips },
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+pub enum Street {
+    Preflop,
+    Flop,
+    Turn,
+    River,
+    Showdown,
+    Complete,
+}
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TransitionError {
@@ -199,10 +217,8 @@ mod tests {
 
     use ladies_core::Card;
 
-    use crate::{
-        Street,
-        state::{Blinds, GameState, GameStateInitOptions, TransitionError, action::Action},
-    };
+    use super::{Action, Street, TransitionError};
+    use crate::state::{Blinds, GameState, GameStateInitOptions};
 
     const OPTIONS: GameStateInitOptions = GameStateInitOptions {
         button: 0,
