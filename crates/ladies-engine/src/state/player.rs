@@ -34,6 +34,10 @@ impl Player {
         self.status == Status::Active
     }
 
+    pub fn can_win_pot(&self) -> bool {
+        self.status != Status::Folded
+    }
+
     pub fn post(&mut self, amount: Chips) {
         let bet = amount.min(self.stack);
 

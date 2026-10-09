@@ -1,9 +1,8 @@
-use ladies_core::Card;
-
 use crate::state::Chips;
 use crate::state::Seat;
 use crate::state::Street;
 use crate::state::player::Status;
+use ladies_core::{Card, Hand, evaluate};
 
 use super::GameState;
 use super::action::Action;
@@ -83,8 +82,14 @@ fn is_round_closed(state: &GameState) -> bool {
 }
 
 fn advance_street(mutation: &mut GameState) {
+    if mutation.street == Street::River {
+        award_showdown(mutation);
+        mutation.street = Street::Complete;
+        return;
+    }
+
     for p in &mut mutation.players {
-        p.bet = 0; // commited is kept
+        p.bet = 0; // committed is kept
     }
 
     mutation.current_bet = 0;
@@ -93,8 +98,9 @@ fn advance_street(mutation: &mut GameState) {
         Street::Preflop => (3, Street::Flop),
         Street::Flop => (1, Street::Turn),
         Street::Turn => (1, Street::River),
-        Street::River => todo!("showdown"),
-        Street::Showdown | Street::Complete => todo!("showdown handling"),
+        Street::River | Street::Showdown | Street::Complete => {
+            unreachable!("advance_street only runs on live betting streets")
+        }
     };
 
     let cards: Vec<Card> = mutation.deck.drain(..dealt).collect();
@@ -104,6 +110,38 @@ fn advance_street(mutation: &mut GameState) {
     mutation.to_act = super::next_active_from(mutation.positions.button, &mutation.players);
     for p in &mut mutation.players {
         p.needs_action = p.can_play();
+    }
+}
+
+fn award_showdown(mutation: &mut GameState) {
+    let pot: Chips = mutation.players.iter().map(|p| p.committed).sum();
+
+    let mut winner: Option<(Seat, ladies_core::HandValue)> = None;
+    for (seat, player) in mutation.players.iter().enumerate() {
+        if !player.can_win_pot() {
+            continue;
+        }
+
+        let cards: Vec<Card> = player
+            .hole
+            .iter()
+            .copied()
+            .chain(mutation.board.iter().copied())
+            .collect();
+        let hand = Hand::new(cards).expect("hole + board are seven distinct cards");
+        let value = evaluate(&hand);
+
+        if winner.as_ref().is_none_or(|(_, best)| value > *best) {
+            winner = Some((seat, value));
+        }
+    }
+
+    let (winner_seat, _) = winner.expect("a hand reaching showdown has at least one participant");
+    mutation.players[winner_seat].stack += pot;
+
+    for p in &mut mutation.players {
+        p.committed = 0;
+        p.bet = 0;
     }
 }
 
@@ -124,7 +162,7 @@ fn award_pot(mutation: &mut GameState) {
 
 #[cfg(test)]
 mod tests {
-    use std::collections::HashSet;
+    use std::{collections::HashSet, str::FromStr};
 
     use ladies_core::Card;
 
@@ -280,5 +318,77 @@ mod tests {
 
         assert_eq!(all.len(), 52);
         assert_eq!(state.deck.len(), 41); // 52 − 6 holes − 5 board
+    }
+
+    /// Parses a single card, for rigging decks.
+    fn card(s: &str) -> Card {
+        Card::from_str(s).expect("valid card")
+    }
+
+    /// Plays a checked-around hand up to the river: preflop call-call-check,
+    /// then three checks per street. The river round is left open.
+    fn walk_to_river(state: &GameState) -> GameState {
+        let state = state.step_with(Action::Call).unwrap(); // UTG
+        let state = state.step_with(Action::Call).unwrap(); // SB
+        let state = state.step_with(Action::Check).unwrap(); // BB — flop
+
+        let state = state.step_with(Action::Check).unwrap(); // SB
+        let state = state.step_with(Action::Check).unwrap(); // BB
+        let state = state.step_with(Action::Check).unwrap(); // button — turn
+
+        let state = state.step_with(Action::Check).unwrap(); // SB
+        let state = state.step_with(Action::Check).unwrap(); // BB
+        state.step_with(Action::Check).unwrap()
+    }
+
+    /// Aces, kings, queens in seat order, then a junk board — seat 0 wins
+    fn rigged_deck() -> Vec<Card> {
+        vec![
+            card("As"),
+            card("Ah"), // seat 0 — aces
+            card("Ks"),
+            card("Kh"), // seat 1 — kings
+            card("Qs"),
+            card("Qh"), // seat 2 — queens
+            card("2c"),
+            card("7d"),
+            card("9c"),
+            card("3s"),
+            card("8h"), // junk board — no flush or straight possible
+        ]
+    }
+
+    #[test]
+    fn the_best_hand_wins_at_showdown() {
+        let state = GameState::from_deck(rigged_deck(), &[5000; 3], OPTIONS);
+        let state = walk_to_river(&state);
+
+        let state = state.step_with(Action::Check).unwrap();
+        let state = state.step_with(Action::Check).unwrap();
+        let next = state.step_with(Action::Check).unwrap();
+
+        assert_eq!(next.street, Street::Complete);
+        assert!(next.is_hand_over());
+        assert_eq!(next.players[0].stack, 5400); // aces beat kings and queens — 4800 + 600 pot
+        assert_eq!(next.players[1].stack, 4800);
+        assert_eq!(next.players[2].stack, 4800);
+        assert_eq!(next.pot(), 0);
+    }
+
+    #[test]
+    fn a_folded_player_is_excluded_from_showdown() {
+        let state = GameState::from_deck(rigged_deck(), &[5000; 3], OPTIONS);
+        let state = walk_to_river(&state);
+
+        let state = state.step_with(Action::Check).unwrap();
+        let state = state.step_with(Action::Check).unwrap();
+        let next = state.step_with(Action::Fold).unwrap();
+
+        assert_eq!(next.street, Street::Complete);
+        assert!(next.is_hand_over());
+        assert_eq!(next.players[0].stack, 4800); // aces, but folded — excluded
+        assert_eq!(next.players[1].stack, 5400); // kings beat queens — 4800 + 600 pot
+        assert_eq!(next.players[2].stack, 4800);
+        assert_eq!(next.pot(), 0);
     }
 }

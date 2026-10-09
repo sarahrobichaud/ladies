@@ -42,11 +42,37 @@ pub struct GameStateInitOptions {
 impl GameState {
     pub fn new(seed: u64, stacks: &[Chips], options: GameStateInitOptions) -> Self {
         let mut deck = StandardDeck::new();
-
         deck.shuffle(&mut StdRng::seed_from_u64(seed));
 
-        let mut players = setup_players(&mut deck, stacks);
-        let (board, deck) = prepare_cards(&mut deck);
+        let mut cards = Vec::with_capacity(52);
+        while let Some(card) = deck.deal() {
+            cards.push(card);
+        }
+
+        Self::from_deck(cards, stacks, options)
+    }
+
+    /// Exists so tests can rig hands deterministically.
+    pub(crate) fn from_deck(
+        cards: Vec<Card>,
+        stacks: &[Chips],
+        options: GameStateInitOptions,
+    ) -> Self {
+        let mut cards = cards;
+        let holes: Vec<[Card; 2]> = (0..stacks.len())
+            .map(|_| {
+                let first = cards.remove(0);
+                let second = cards.remove(0);
+                [first, second]
+            })
+            .collect();
+
+        let mut players: Vec<Player> = holes
+            .into_iter()
+            .zip(stacks)
+            .map(|(hole, &stack)| Player::new(hole, stack))
+            .collect();
+
         let (sb_seat, bb_seat) = get_blind_seats(options.button, &players);
 
         players[sb_seat].post(options.blinds.small);
@@ -59,8 +85,8 @@ impl GameState {
         Self {
             street: Street::Preflop,
             current_bet: players[bb_seat].bet,
-            board,
-            deck,
+            board: Vec::with_capacity(5),
+            deck: cards,
             positions: Positions {
                 sb: sb_seat,
                 bb: bb_seat,
@@ -82,29 +108,6 @@ impl GameState {
     pub fn is_hand_over(&self) -> bool {
         self.street == Street::Complete
     }
-}
-
-fn setup_players(deck: &mut StandardDeck, stacks: &[Chips]) -> Vec<Player> {
-    let holes: Vec<[Card; 2]> = (0..stacks.len())
-        .map(|_| deck.deal_n::<2>().expect("52 cards"))
-        .collect();
-
-    holes
-        .iter()
-        .zip(stacks)
-        .map(|(&hole, &stack)| Player::new(hole, stack))
-        .collect()
-}
-
-fn prepare_cards(deck: &mut StandardDeck) -> (Vec<Card>, Vec<Card>) {
-    let board = Vec::with_capacity(5);
-    let mut undealt = Vec::with_capacity(deck.remaining());
-
-    while let Some(card) = deck.deal() {
-        undealt.push(card);
-    }
-
-    (board, undealt)
 }
 
 fn next_seat(seat: Seat, table_size: usize) -> Seat {
