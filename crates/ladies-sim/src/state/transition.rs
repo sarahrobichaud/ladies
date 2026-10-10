@@ -21,12 +21,13 @@ impl HandState {
 
 #[cfg(test)]
 pub(crate) mod fixtures {
+    use std::collections::HashSet;
     use std::str::FromStr;
 
     use ladies_core::Card;
 
     use super::Action;
-    use crate::state::{Blinds, HandOptions, HandState, Street};
+    use crate::state::{Blinds, Chips, HandOptions, HandState, Street};
 
     pub(crate) const OPTIONS: HandOptions = HandOptions {
         button: 0,
@@ -36,9 +37,39 @@ pub(crate) mod fixtures {
         },
     };
 
-    /// Parses a single card, for rigging decks.
-    pub(crate) fn card(s: &str) -> Card {
+    fn card(s: &str) -> Card {
         Card::from_str(s).expect("valid card")
+    }
+
+    /// Assembles a deck from two-card hole hands in seat order, then the
+    /// board. Panics in debug builds if any card is repeated.
+    pub(crate) fn deck(holes: &[(&str, &str)], board: &[&str]) -> Vec<Card> {
+        let cards: Vec<Card> = holes
+            .iter()
+            .flat_map(|&(first, second)| [card(first), card(second)])
+            .chain(board.iter().map(|s| card(s)))
+            .collect();
+
+        let unique: HashSet<_> = cards.iter().collect();
+        debug_assert_eq!(
+            unique.len(),
+            cards.len(),
+            "rigged decks must not repeat cards"
+        );
+
+        cards
+    }
+
+    /// Deals a fresh hand from a rigged deck, checking the deck supplies two
+    /// hole cards per player and the five-card board.
+    pub(crate) fn deal(deck: Vec<Card>, stacks: &[Chips]) -> HandState {
+        assert_eq!(
+            deck.len(),
+            stacks.len() * 2 + 5,
+            "deck must supply two hole cards per player and the board"
+        );
+
+        HandState::from_deck(deck, stacks, OPTIONS)
     }
 
     /// Calls the hand in preflop, then checks around each street until
@@ -68,75 +99,62 @@ pub(crate) mod fixtures {
         state
     }
 
+    /// Asserts the hand completed cleanly: paid out, pot swept.
+    pub(crate) fn assert_settled(state: &HandState, stacks: &[Chips]) {
+        assert!(state.is_hand_over());
+        assert_eq!(state.pot(), 0);
+        assert_eq!(state.stacks(), stacks);
+    }
+
+    /// A fresh heads-up hand: seat 0 is the button and posts the small blind.
+    pub(crate) fn heads_up() -> HandState {
+        HandState::new(1, &[5000, 5000], OPTIONS)
+    }
+
+    /// A heads-up hand dealt from a rigged deck.
+    pub(crate) fn heads_up_dealt(deck: Vec<Card>) -> HandState {
+        deal(deck, &[5000, 5000])
+    }
+
     /// Aces, kings, queens in seat order, then a junk board — seat 0 wins
     pub(crate) fn aces_kings_queens_deck() -> Vec<Card> {
-        vec![
-            card("As"),
-            card("Ah"), // seat 0 — aces
-            card("Ks"),
-            card("Kh"), // seat 1 — kings
-            card("Qs"),
-            card("Qh"), // seat 2 — queens
-            card("2c"),
-            card("7d"),
-            card("9c"),
-            card("3s"),
-            card("8h"), // junk board — no flush or straight possible
-        ]
+        deck(
+            &[("As", "Ah"), ("Ks", "Kh"), ("Qs", "Qh")],
+            &["2c", "7d", "9c", "3s", "8h"],
+        )
     }
 
     /// Seats 0 and 2 hold equal pairs of aces, seat 1 kings — seats 0 and 2 split
     pub(crate) fn aces_kings_aces_deck() -> Vec<Card> {
-        vec![
-            card("As"),
-            card("Ah"), // seat 0 — aces
-            card("Ks"),
-            card("Kh"), // seat 1 — kings
-            card("Ad"),
-            card("Ac"), // seat 2 — aces, equal to seat 0
-            card("2c"),
-            card("7d"),
-            card("9c"),
-            card("3s"),
-            card("8h"), // junk board — no flush or straight possible
-        ]
+        deck(
+            &[("As", "Ah"), ("Ks", "Kh"), ("Ad", "Ac")],
+            &["2c", "7d", "9c", "3s", "8h"],
+        )
     }
 
     /// Kings, queens, aces, jacks in seat order, then a junk board; seat 2's
     /// aces beat the live kings and jacks
     pub(crate) fn kings_queens_aces_jacks_deck() -> Vec<Card> {
-        vec![
-            card("Ks"),
-            card("Kh"), // seat 0: kings, best of the live players
-            card("Qs"),
-            card("Qh"), // seat 1: folds the SB, dead money
-            card("As"),
-            card("Ah"), // seat 2: aces, all-in for 150
-            card("Js"),
-            card("Jh"), // seat 3: jacks
-            card("2c"),
-            card("7d"),
-            card("9c"),
-            card("3s"),
-            card("8h"), // junk board, no flush or straight possible
-        ]
+        deck(
+            &[("Ks", "Kh"), ("Qs", "Qh"), ("As", "Ah"), ("Js", "Jh")],
+            &["2c", "7d", "9c", "3s", "8h"],
+        )
     }
 
     /// Seats 0 and 1 hold identical king-four hands over the paired board;
     /// seat 2's ace-queen loses
     pub(crate) fn tied_king_hands_deck() -> Vec<Card> {
-        vec![
-            card("Ks"),
-            card("4d"), // seat 0: the board's pair of 2s, ace-king kickers
-            card("Kh"),
-            card("4h"), // seat 1: identical best five to seat 0
-            card("Qs"),
-            card("Jd"), // seat 2: ace-queen kickers lose
-            card("Ac"),
-            card("2c"),
-            card("2d"),
-            card("9c"),
-            card("3s"), // paired board, hole cards avoid the three-club flush
-        ]
+        deck(
+            &[("Ks", "4d"), ("Kh", "4h"), ("Qs", "Jd")],
+            &["Ac", "2c", "2d", "9c", "3s"],
+        )
+    }
+
+    /// Aces versus kings, then a junk board — seat 0 wins
+    pub(crate) fn aces_kings_deck() -> Vec<Card> {
+        deck(
+            &[("As", "Ah"), ("Ks", "Kh")],
+            &["2c", "7d", "9c", "3s", "8h"],
+        )
     }
 }

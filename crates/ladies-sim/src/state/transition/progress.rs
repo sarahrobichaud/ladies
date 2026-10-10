@@ -146,7 +146,9 @@ mod flow_tests {
 
     use crate::state::{Action, HandState, Pot, Street};
 
-    use super::super::fixtures::{OPTIONS, aces_kings_queens_deck, check_until};
+    use super::super::fixtures::{
+        OPTIONS, aces_kings_queens_deck, assert_settled, check_until, deal,
+    };
 
     #[test]
     fn folding_around_ends_the_hand() {
@@ -165,10 +167,7 @@ mod flow_tests {
         let state = state.apply(Action::Fold).unwrap(); // UTG
         let state = state.apply(Action::Fold).unwrap(); // SB
 
-        let bb = state.positions.bb;
-
-        assert_eq!(state.players[bb].stack, 5100);
-        assert_eq!(state.pot(), 0);
+        assert_settled(&state, &[5000, 4900, 5100]);
     }
 
     #[test]
@@ -230,7 +229,7 @@ mod flow_tests {
 
     #[test]
     fn pots_are_observable_during_the_hand() {
-        let state = HandState::from_deck(aces_kings_queens_deck(), &[200, 5000, 5000], OPTIONS);
+        let state = deal(aces_kings_queens_deck(), &[200, 5000, 5000]);
 
         let state = state.apply(Action::Call).unwrap(); // UTG, all-in for 200
         let state = state.apply(Action::Raise { to: 500 }).unwrap(); // SB
@@ -257,16 +256,16 @@ mod flow_tests {
 
 #[cfg(test)]
 mod showdown_tests {
-    use crate::state::{Action, HandState, Street};
+    use crate::state::{Action, Street};
 
     use super::super::fixtures::{
-        OPTIONS, aces_kings_aces_deck, aces_kings_queens_deck, check_around, check_until,
-        kings_queens_aces_jacks_deck, tied_king_hands_deck,
+        aces_kings_aces_deck, aces_kings_queens_deck, assert_settled, check_around, check_until,
+        deal, kings_queens_aces_jacks_deck, tied_king_hands_deck,
     };
 
     #[test]
     fn the_best_hand_wins_at_showdown() {
-        let state = HandState::from_deck(aces_kings_queens_deck(), &[5000; 3], OPTIONS);
+        let state = deal(aces_kings_queens_deck(), &[5000; 3]);
         let state = check_until(&state, Street::River);
 
         let state = state.apply(Action::Check).unwrap();
@@ -274,16 +273,12 @@ mod showdown_tests {
         let next = state.apply(Action::Check).unwrap();
 
         assert_eq!(next.street, Street::Complete);
-        assert!(next.is_hand_over());
-        assert_eq!(next.players[0].stack, 5400); // aces beat kings and queens — 4800 + 600 pot
-        assert_eq!(next.players[1].stack, 4800);
-        assert_eq!(next.players[2].stack, 4800);
-        assert_eq!(next.pot(), 0);
+        assert_settled(&next, &[5400, 4800, 4800]); // aces beat kings and queens, 4800 + 600 pot
     }
 
     #[test]
     fn a_folded_player_is_excluded_from_showdown() {
-        let state = HandState::from_deck(aces_kings_queens_deck(), &[5000; 3], OPTIONS);
+        let state = deal(aces_kings_queens_deck(), &[5000; 3]);
         let state = check_until(&state, Street::River);
 
         let state = state.apply(Action::Check).unwrap();
@@ -291,17 +286,13 @@ mod showdown_tests {
         let next = state.apply(Action::Fold).unwrap();
 
         assert_eq!(next.street, Street::Complete);
-        assert!(next.is_hand_over());
-        assert_eq!(next.players[0].stack, 4800); // aces, but folded — excluded
-        assert_eq!(next.players[1].stack, 5400); // kings beat queens — 4800 + 600 pot
-        assert_eq!(next.players[2].stack, 4800);
-        assert_eq!(next.pot(), 0);
+        assert_settled(&next, &[4800, 5400, 4800]); // aces folded, kings beat queens
     }
 
     #[test]
     fn an_all_in_player_still_shows_down() {
         // seat 0 holds the aces with exactly the BB's 200, so no sidepot
-        let state = HandState::from_deck(aces_kings_queens_deck(), &[200, 5000, 5000], OPTIONS);
+        let state = deal(aces_kings_queens_deck(), &[200, 5000, 5000]);
 
         let state = state.apply(Action::Call).unwrap();
         assert!(!state.players[0].can_play()); // can't act anymore
@@ -314,18 +305,14 @@ mod showdown_tests {
         let state = check_until(&state, Street::Complete);
 
         assert_eq!(state.street, Street::Complete);
-        assert!(state.is_hand_over());
-        assert_eq!(state.players[0].stack, 600); // aces win the whole pot — all-in for exactly
-        assert_eq!(state.players[1].stack, 4800);
-        assert_eq!(state.players[2].stack, 4800);
-        assert_eq!(state.pot(), 0);
+        assert_settled(&state, &[600, 4800, 4800]); // aces win the whole pot, all-in for exactly
     }
 
     #[test]
     fn an_all_in_player_cannot_win_more_than_they_matched_from_each_player() {
         // seat 0 is all-in for 200; the extra 300 from seats 1 and 2 forms
         // a side pot seat 0 cannot touch
-        let state = HandState::from_deck(aces_kings_queens_deck(), &[200, 5000, 5000], OPTIONS);
+        let state = deal(aces_kings_queens_deck(), &[200, 5000, 5000]);
 
         let state = state.apply(Action::Call).unwrap(); // UTG, all-in for 200
         let state = state.apply(Action::Raise { to: 500 }).unwrap(); // SB
@@ -336,22 +323,14 @@ mod showdown_tests {
         let next = check_around(&state, Street::Complete);
 
         assert_eq!(next.street, Street::Complete);
-        assert!(next.is_hand_over());
-        assert_eq!(next.players[0].stack, 600); // aces take the 600 main pot, 200 from each
-        assert_eq!(next.players[1].stack, 5100); // kings take the 600 side pot, 4500 + 600
-        assert_eq!(next.players[2].stack, 4500); // queens lose
-        assert_eq!(next.pot(), 0);
+        assert_settled(&next, &[600, 5100, 4500]); // aces the main pot, kings the side pot
     }
 
     #[test]
     fn an_all_in_player_wins_their_match_plus_the_dead_money() {
         // seat 2 is all-in for 150 and seat 1 folds the SB; the all-in wins
         // 150 from each live player plus the dead 100
-        let state = HandState::from_deck(
-            kings_queens_aces_jacks_deck(),
-            &[5000, 5000, 150, 5000],
-            OPTIONS,
-        );
+        let state = deal(kings_queens_aces_jacks_deck(), &[5000, 5000, 150, 5000]);
 
         let state = state.apply(Action::Call).unwrap(); // UTG
         let state = state.apply(Action::Call).unwrap(); // button
@@ -363,17 +342,12 @@ mod showdown_tests {
         let next = check_around(&state, Street::Complete);
 
         assert_eq!(next.street, Street::Complete);
-        assert!(next.is_hand_over());
-        assert_eq!(next.players[0].stack, 4900); // kings take the 100 top layer, 4800 + 100
-        assert_eq!(next.players[1].stack, 4900); // folded SB
-        assert_eq!(next.players[2].stack, 550); // aces: 150 from each live player + dead 100
-        assert_eq!(next.players[3].stack, 4800); // jacks lose
-        assert_eq!(next.pot(), 0);
+        assert_settled(&next, &[4900, 4900, 550, 4800]); // aces: 150 from each + dead 100
     }
 
     #[test]
     fn pot_splits_when_best_hands_are_equal() {
-        let state = HandState::from_deck(aces_kings_aces_deck(), &[5000; 3], OPTIONS);
+        let state = deal(aces_kings_aces_deck(), &[5000; 3]);
         let state = check_until(&state, Street::River);
         assert_eq!(state.pot(), 600);
 
@@ -382,18 +356,13 @@ mod showdown_tests {
         let next = state.apply(Action::Check).unwrap();
 
         assert_eq!(next.street, Street::Complete);
-
-        assert!(next.is_hand_over());
-        assert_eq!(next.players[0].stack, 5100); // aces split the pot — 4800 + 300
-        assert_eq!(next.players[1].stack, 4800); // kings lose
-        assert_eq!(next.players[2].stack, 5100); // aces split the pot — 4800 + 300
-        assert_eq!(next.pot(), 0);
+        assert_settled(&next, &[5100, 4800, 5100]); // aces split the pot, 4800 + 300 each
     }
 
     #[test]
     fn an_odd_pot_gives_the_extra_chip_to_the_first_table_position() {
         // a raise to 501 builds a 1503 pot, one odd chip over a two-way split
-        let state = HandState::from_deck(tied_king_hands_deck(), &[5000; 3], OPTIONS);
+        let state = deal(tied_king_hands_deck(), &[5000; 3]);
 
         let state = state.apply(Action::Raise { to: 501 }).unwrap(); // UTG
         let state = state.apply(Action::Call).unwrap(); // SB
@@ -404,11 +373,43 @@ mod showdown_tests {
         let next = check_around(&state, Street::Complete);
 
         assert_eq!(next.street, Street::Complete);
+        assert_settled(&next, &[5251, 5250, 4499]); // the odd chip goes to seat 0
+    }
+}
 
-        assert!(next.is_hand_over());
-        assert_eq!(next.players[0].stack, 5251); // 4499 + 752, the odd chip goes to seat 0
-        assert_eq!(next.players[1].stack, 5250); // 4499 + 751
-        assert_eq!(next.players[2].stack, 4499); // ace-queen kickers lose
-        assert_eq!(next.pot(), 0);
+#[cfg(test)]
+mod heads_up_tests {
+    use crate::state::{Action, Street};
+
+    use super::super::fixtures::{
+        aces_kings_deck, assert_settled, check_until, heads_up, heads_up_dealt,
+    };
+
+    #[test]
+    fn the_button_posts_the_small_blind_and_acts_first_preflop() {
+        let state = heads_up();
+
+        assert_eq!(state.positions.button, 0);
+        assert_eq!(state.positions.sb, 0);
+        assert_eq!(state.to_act, state.positions.sb);
+        assert_eq!(state.stacks(), vec![4900, 4800]);
+    }
+
+    #[test]
+    fn a_fold_ends_the_hand_with_the_bb_taking_the_blinds() {
+        let state = heads_up();
+
+        let state = state.apply(Action::Fold).unwrap(); // button/SB folds
+
+        assert_settled(&state, &[4900, 5100]);
+    }
+
+    #[test]
+    fn a_heads_up_hand_shows_down() {
+        let state = heads_up_dealt(aces_kings_deck());
+        let state = check_until(&state, Street::Complete);
+
+        assert_eq!(state.street, Street::Complete);
+        assert_settled(&state, &[5200, 4800]); // aces take the 400 pot
     }
 }

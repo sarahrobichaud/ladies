@@ -123,7 +123,7 @@ mod call_tests {
 
         let caller = &next.players[utg];
         assert_eq!(caller.bet, OPTIONS.blinds.big); // matched the BB's 200
-        assert_eq!(caller.stack, 5000 - OPTIONS.blinds.big);
+        assert_eq!(next.stacks(), vec![4800, 4900, 4800]);
         assert!(!caller.needs_action);
         assert_eq!(next.to_act, next.positions.sb); // action moves on
     }
@@ -139,7 +139,7 @@ mod call_tests {
 
         assert_eq!(next.street, Street::Flop);
         assert_eq!(next.players[bb].committed, OPTIONS.blinds.big);
-        assert_eq!(next.players[bb].stack, 5000 - OPTIONS.blinds.big);
+        assert_eq!(next.stacks(), vec![4800; 3]);
     }
 
     #[test]
@@ -162,9 +162,9 @@ mod call_tests {
 
 #[cfg(test)]
 mod check_tests {
-    use crate::state::{Action, HandState, IllegalAction};
+    use crate::state::{Action, HandState, IllegalAction, Street};
 
-    use super::super::fixtures::OPTIONS;
+    use super::super::fixtures::{OPTIONS, check_until};
 
     #[test]
     fn checking_when_facing_a_bet_is_illegal() {
@@ -173,6 +173,16 @@ mod check_tests {
         let result = state.apply(Action::Check);
 
         assert!(matches!(result, Err(IllegalAction::CheckFacingBet)));
+    }
+
+    #[test]
+    fn a_check_passes_action_to_the_next_player() {
+        let state = check_until(&HandState::new(1, &[5000; 3], OPTIONS), Street::Flop);
+
+        let next = state.apply(Action::Check).unwrap(); // SB checks
+
+        assert_eq!(next.to_act, state.positions.bb);
+        assert!(!next.players[state.positions.sb].needs_action);
     }
 }
 
@@ -191,7 +201,7 @@ mod raise_tests {
 
         let raiser = &next.players[utg];
         assert_eq!(raiser.bet, 600);
-        assert_eq!(raiser.stack, 5000 - 600);
+        assert_eq!(next.stacks(), vec![4400, 4900, 4800]);
         assert_eq!(next.current_bet, 600);
         assert!(!next.players[utg].needs_action);
         assert_eq!(next.to_act, next.positions.sb); // action moves on
