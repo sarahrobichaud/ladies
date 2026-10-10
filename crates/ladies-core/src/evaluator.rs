@@ -85,6 +85,31 @@ impl Display for HandValue {
     }
 }
 
+pub fn evaluate_all(candidates: &[(usize, Hand)]) -> Vec<(usize, HandValue)> {
+    candidates
+        .iter()
+        .map(|(i, hand)| (*i, evaluate(hand)))
+        .collect()
+}
+
+pub fn best_of(evaluated: &[(usize, HandValue)]) -> Option<(HandValue, Vec<usize>)> {
+    let best_value = evaluated.iter().map(|&(_, value)| value).max()?;
+
+    let winners = evaluated
+        .iter()
+        .filter(|&&(_, value)| value == best_value)
+        .map(|&(i, _)| i)
+        .collect();
+
+    Some((best_value, winners))
+}
+
+/// Convenience over [`evaluate_all`] + [`best_of`] for callers that only
+/// need the winning value and its indices.
+pub fn evaluate_best_hand(candidates: &[(usize, Hand)]) -> Option<(HandValue, Vec<usize>)> {
+    best_of(&evaluate_all(candidates))
+}
+
 /// Ranks a hand by evaluating every five-card combination it contains and
 /// keeping the strongest.
 pub fn evaluate(hand: &Hand) -> HandValue {
@@ -217,7 +242,7 @@ fn straight_high(counts: &[u8; RANKS.len()]) -> Option<Rank> {
 mod tests {
     use std::str::FromStr;
 
-    use crate::hand::Hand;
+    use crate::{Category::Pair, hand::Hand};
 
     use super::*;
 
@@ -543,5 +568,40 @@ mod tests {
             "Full House, 7s over Ks"
         );
         assert_eq!(value("9h 9d 9s 9c Ad").to_string(), "Four of a Kind, 9s");
+    }
+
+    #[test]
+    fn evaluate_hands_returns_the_best_hand() {
+        let candidates: Vec<(usize, Hand)> = vec![
+            Hand::from_str("Qc Ts Ac 8d 7d 5d 2d"),
+            Hand::from_str("Ad Jh Ac 8s 7d 5d 2d"),
+            Hand::from_str("5c 3c 8d 7d 5d 2d"),
+            Hand::from_str("3s 7c 8d 7d 5d 2d"),
+        ]
+        .into_iter()
+        .enumerate()
+        .filter_map(|(i, hand)| hand.ok().map(|v| (i, v)))
+        .collect();
+
+        let (hand, winner_indices) =
+            evaluate_best_hand(&candidates).expect("candidates are non-empty");
+
+        assert_eq!(
+            hand,
+            HandValue::Pair(Rank::Ace, [Rank::Jack, Rank::Eight, Rank::Seven])
+        );
+        assert_eq!(winner_indices.len(), 1);
+        assert_eq!(winner_indices[0], 1);
+    }
+
+    #[test]
+    fn high_cards_compare_rank_by_rank() {
+        assert!(value("Ah Kd Qc Js 9d") > value("Ah Kd Qc Js 8d"));
+        assert!(value("Ah Kd Qc Js 9d") > value("Ah Kd Qc Ts 9d"));
+    }
+
+    #[test]
+    fn identical_best_fives_compare_equal_regardless_of_suits() {
+        assert_eq!(value("Ah Ad Kh Qs Jd"), value("As Ac Kd Qc Jh"));
     }
 }
