@@ -3,10 +3,12 @@ use rand::{SeedableRng, rngs::StdRng};
 
 pub use blinds::Blinds;
 pub use player::Player;
+pub use pot::Pot;
 pub use transition::{Action, IllegalAction, Street};
 
 mod blinds;
 mod player;
+mod pot;
 mod transition;
 
 pub type Chips = u64;
@@ -94,7 +96,20 @@ impl HandState {
     }
 
     pub fn pot(&self) -> Chips {
-        self.players.iter().map(|p| p.committed).sum()
+        pot::total(&self.players)
+    }
+
+    /// The pot split into layers at each distinct all-in contribution,
+    /// ordered from the main pot upward. Sums to [`HandState::pot`]; empty
+    /// once the hand is over.
+    pub fn pots(&self) -> Vec<Pot> {
+        pot::layers(&self.players)
+    }
+
+    /// The main pot: the bottom layer, the chips every remaining player
+    /// has matched. `None` once the hand is over.
+    pub fn main_pot(&self) -> Option<Pot> {
+        self.pots().into_iter().next()
     }
 
     pub fn stacks(&self) -> Vec<Chips> {
