@@ -1,9 +1,9 @@
-use std::{
-    collections::{HashMap, hash_map::Entry},
-    fmt,
-};
+use std::fmt;
 
-use ladies_core::{Card, Hand, HandValue, evaluate};
+use ladies_core::{
+    Card, Hand,
+    evaluator::{best_of, evaluate_all},
+};
 
 use super::HandState;
 use crate::state::{Chips, Seat, player::Status};
@@ -170,8 +170,8 @@ fn advance_street(mutation: &mut HandState) {
 fn award_showdown(mutation: &mut HandState) {
     let pot: Chips = mutation.players.iter().map(|p| p.committed).sum();
 
-    let mut results: HashMap<HandValue, Vec<Seat>> = HashMap::new();
-    let mut winner: Option<(Seat, ladies_core::HandValue)> = None;
+    let mut candidate_hands: Vec<(Seat, Hand)> = Vec::with_capacity(mutation.players.len());
+
     for (seat, player) in mutation.players.iter().enumerate() {
         if !player.can_win_pot() {
             continue;
@@ -184,37 +184,58 @@ fn award_showdown(mutation: &mut HandState) {
             .chain(mutation.board.iter().copied())
             .collect();
         let hand = Hand::new(cards).expect("hole + board are seven distinct cards");
-        let value = evaluate(&hand);
 
-        match results.entry(value) {
-            Entry::Vacant(e) => {
-                e.insert(vec![seat]);
-            }
-            Entry::Occupied(mut e) => {
-                e.get_mut().push(seat);
-            }
-        }
-
-        if winner.as_ref().is_none_or(|(_, best)| value > *best) {
-            winner = Some((seat, value));
-        }
+        candidate_hands.push((seat, hand));
     }
 
-    let best_hand = results
-        .keys()
-        .max()
-        .copied()
-        .expect("Theres should be at least one hand during showdown");
+    let evaluated = evaluate_all(&candidate_hands);
 
-    let winners: Vec<(Seat, HandValue)> = results[&best_hand]
+    // A player can win from each opponent only up to what they matched, so
+    // the pot splits into layers at each distinct contribution. Each layer
+    // is contested only by players who contributed at least that much.
+    let mut levels: Vec<Chips> = mutation
+        .players
         .iter()
-        .map(|&s| (s, best_hand))
+        .filter(|p| p.can_win_pot())
+        .map(|p| p.committed)
         .collect();
+    levels.sort_unstable();
+    levels.dedup();
 
-    let pot = pot / winners.len() as u64;
-    for (seat, _) in winners {
-        mutation.players[seat].stack += pot;
+    let mut awarded = 0;
+    let mut matched = 0;
+    for level in levels {
+        // Every player chips into each layer up to their own commitment —
+        // folded players' dead money included — but only players who matched
+        // the level in full are eligible to win it.
+        let layer: Chips = mutation
+            .players
+            .iter()
+            .map(|p| p.committed.min(level) - p.committed.min(matched))
+            .sum();
+        awarded += layer;
+
+        let eligible: Vec<_> = evaluated
+            .iter()
+            .filter(|&&(seat, _)| mutation.players[seat].committed >= level)
+            .copied()
+            .collect();
+        let (_, winner_seats) = best_of(&eligible).expect("layer has at least one candidate");
+
+        let winner_count = winner_seats.len();
+        let share = layer / winner_count as u64;
+        let odd_chips = (layer % winner_count as u64) as usize;
+
+        // Odd chips go one apiece to the earliest table positions. Winners
+        // are collected in seat order, so index 0 is the first table position.
+        for (index, &seat) in winner_seats.iter().enumerate() {
+            mutation.players[seat].stack += share + u64::from(index < odd_chips);
+        }
+
+        matched = level;
     }
+
+    debug_assert_eq!(awarded, pot, "every committed chip must be awarded");
 
     for p in &mut mutation.players {
         p.committed = 0;
@@ -496,6 +517,82 @@ mod tests {
     }
 
     #[test]
+    fn an_all_in_player_cannot_win_more_than_they_matched_from_each_player() {
+        // seat 0 is all-in for 200 while seats 1 and 2 commit 500 each — the
+        // extra 300 from each forms a side pot seat 0 cannot touch
+        let state = HandState::from_deck(rigged_deck(), &[200, 5000, 5000], OPTIONS);
+
+        let state = state.apply(Action::Call).unwrap(); // UTG — all-in for 200
+        let state = state.apply(Action::Raise { to: 500 }).unwrap(); // SB
+        let state = state.apply(Action::Call).unwrap(); // BB
+        assert_eq!(state.pot(), 1200);
+
+        // flop, turn, river: SB and BB check around; the all-in player sits out
+        let state = state.apply(Action::Check).unwrap();
+        let state = state.apply(Action::Check).unwrap(); // → turn
+
+        let state = state.apply(Action::Check).unwrap();
+        let state = state.apply(Action::Check).unwrap(); // → river
+
+        let state = state.apply(Action::Check).unwrap();
+        let next = state.apply(Action::Check).unwrap(); // → showdown
+
+        assert_eq!(next.street, Street::Complete);
+        assert!(next.is_hand_over());
+        assert_eq!(next.players[0].stack, 600); // aces take the 600 main pot — 200 from each
+        assert_eq!(next.players[1].stack, 5100); // kings take the 600 side pot — 4500 + 600
+        assert_eq!(next.players[2].stack, 4500); // queens lose
+        assert_eq!(next.pot(), 0);
+    }
+
+    #[test]
+    fn an_all_in_player_wins_their_match_plus_the_dead_money() {
+        // seat 2 is all-in for 150 while seats 0 and 3 call 200 and seat 1
+        // folds the SB — the all-in player can win 150 from each live player
+        // plus seat 1's dead 100, but nothing from the layer above
+        let deck = vec![
+            card("Ks"),
+            card("Kh"), // seat 0 — kings, best of the live players
+            card("Qs"),
+            card("Qh"), // seat 1 — folds the SB, dead money
+            card("As"),
+            card("Ah"), // seat 2 — aces, all-in for 150
+            card("Js"),
+            card("Jh"), // seat 3 — jacks
+            card("2c"),
+            card("7d"),
+            card("9c"),
+            card("3s"),
+            card("8h"), // junk board — no flush or straight possible
+        ];
+        let state = HandState::from_deck(deck, &[5000, 5000, 150, 5000], OPTIONS);
+
+        let state = state.apply(Action::Call).unwrap(); // UTG
+        let state = state.apply(Action::Call).unwrap(); // button
+        let state = state.apply(Action::Fold).unwrap(); // SB — dead money
+        // BB is all-in for 150; the round closes
+        assert_eq!(state.pot(), 650);
+
+        // flop, turn, river: UTG and button check around
+        let state = state.apply(Action::Check).unwrap();
+        let state = state.apply(Action::Check).unwrap(); // → turn
+
+        let state = state.apply(Action::Check).unwrap();
+        let state = state.apply(Action::Check).unwrap(); // → river
+
+        let state = state.apply(Action::Check).unwrap();
+        let next = state.apply(Action::Check).unwrap(); // → showdown
+
+        assert_eq!(next.street, Street::Complete);
+        assert!(next.is_hand_over());
+        assert_eq!(next.players[0].stack, 4900); // kings take the 100 top layer — 4800 + 100
+        assert_eq!(next.players[1].stack, 4900); // folded SB
+        assert_eq!(next.players[2].stack, 550); // aces: 150 from each live player + dead 100
+        assert_eq!(next.players[3].stack, 4800); // jacks lose
+        assert_eq!(next.pot(), 0);
+    }
+
+    #[test]
     fn a_raise_sets_the_current_bet() {
         let state = HandState::new(1, &[5000; 3], OPTIONS);
         let utg = state.to_act;
@@ -596,7 +693,7 @@ mod tests {
     }
 
     /// Seats 0 and 2 hold equal pairs of aces, seat 1 kings — seats 0 and 2 split
-    fn equalHandDeck() -> Vec<Card> {
+    fn equal_hand_deck() -> Vec<Card> {
         vec![
             card("As"),
             card("Ah"), // seat 0 — aces
@@ -614,7 +711,7 @@ mod tests {
 
     #[test]
     fn pot_splits_when_best_hands_are_equal() {
-        let state = HandState::from_deck(equalHandDeck(), &[5000; 3], OPTIONS);
+        let state = HandState::from_deck(equal_hand_deck(), &[5000; 3], OPTIONS);
         let state = walk_to_river(&state);
         assert_eq!(state.pot(), 600);
 
@@ -628,6 +725,51 @@ mod tests {
         assert_eq!(next.players[0].stack, 5100); // aces split the pot — 4800 + 300
         assert_eq!(next.players[1].stack, 4800); // kings lose
         assert_eq!(next.players[2].stack, 5100); // aces split the pot — 4800 + 300
+        assert_eq!(next.pot(), 0);
+    }
+
+    #[test]
+    fn an_odd_pot_gives_the_extra_chip_to_the_first_table_position() {
+        // A raise to 501 builds a pot of 1503 — one odd chip over a two-way
+        // split. Seats 0 and 1 tie; seat 2 loses.
+        let deck = vec![
+            card("Ks"),
+            card("4d"), // seat 0 — the board's pair of 2s, ace-king kickers
+            card("Kh"),
+            card("4h"), // seat 1 — identical best five to seat 0
+            card("Qs"),
+            card("Jd"), // seat 2 — ace-queen kickers lose
+            card("Ac"),
+            card("2c"),
+            card("2d"),
+            card("9c"),
+            card("3s"), // paired board — hole cards avoid the three-club flush
+        ];
+        let state = HandState::from_deck(deck, &[5000; 3], OPTIONS);
+
+        let state = state.apply(Action::Raise { to: 501 }).unwrap(); // UTG
+        let state = state.apply(Action::Call).unwrap(); // SB
+        let state = state.apply(Action::Call).unwrap(); // BB
+        assert_eq!(state.pot(), 1503);
+
+        let state = state.apply(Action::Check).unwrap(); // SB
+        let state = state.apply(Action::Check).unwrap(); // BB
+        let state = state.apply(Action::Check).unwrap(); // button — turn
+
+        let state = state.apply(Action::Check).unwrap();
+        let state = state.apply(Action::Check).unwrap();
+        let state = state.apply(Action::Check).unwrap(); // river
+
+        let state = state.apply(Action::Check).unwrap();
+        let state = state.apply(Action::Check).unwrap();
+        let next = state.apply(Action::Check).unwrap();
+
+        assert_eq!(next.street, Street::Complete);
+
+        assert!(next.is_hand_over());
+        assert_eq!(next.players[0].stack, 5251); // 4499 + 752 — the odd chip goes to seat 0
+        assert_eq!(next.players[1].stack, 5250); // 4499 + 751
+        assert_eq!(next.players[2].stack, 4499); // ace-queen kickers lose
         assert_eq!(next.pot(), 0);
     }
 }
