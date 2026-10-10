@@ -19,15 +19,13 @@ pub(super) fn advance_turn(
     mutation: &mut HandState,
     seat: Seat,
 ) -> Result<&HandState, IllegalAction> {
-    mutation.to_act = next_active_from(seat, &mutation.players);
-
     if is_fold_win(mutation) {
         let winnings = pot::total(&mutation.players);
         let winner = mutation
             .players
             .iter()
-            .position(|p| p.can_play())
-            .expect("fold win implies exactly one active player");
+            .position(|p| p.can_win_pot())
+            .expect("fold win implies exactly one player who hasn't folded");
         pot::award(&mut mutation.players, &[winner], winnings);
 
         for p in &mut mutation.players {
@@ -36,7 +34,12 @@ pub(super) fn advance_turn(
         }
 
         mutation.street = Street::Complete;
-    } else if is_round_closed(mutation) {
+        return Ok(mutation);
+    }
+
+    mutation.to_act = next_active_from(seat, &mutation.players);
+
+    if is_round_closed(mutation) {
         advance_street(mutation);
     }
 
@@ -44,7 +47,7 @@ pub(super) fn advance_turn(
 }
 
 fn is_fold_win(state: &HandState) -> bool {
-    state.players.iter().filter(|p| p.can_play()).count() == 1
+    state.players.iter().filter(|p| p.can_win_pot()).count() == 1
 }
 
 fn is_round_closed(state: &HandState) -> bool {
@@ -147,7 +150,7 @@ mod flow_tests {
     use crate::state::{Action, HandState, Pot, Street};
 
     use super::super::fixtures::{
-        OPTIONS, aces_kings_queens_deck, assert_settled, check_until, deal,
+        OPTIONS, aces_kings_queens_deck, assert_settled, check_around, check_until, deal, deck,
     };
 
     #[test]
@@ -168,6 +171,41 @@ mod flow_tests {
         let state = state.apply(Action::Fold).unwrap(); // SB
 
         assert_settled(&state, &[5000, 4900, 5100]);
+    }
+
+    #[test]
+    fn everyone_folding_to_an_all_in_player_awards_them_the_pot() {
+        // seat 0 calls all-in for 150; the blinds fold — the all-in player
+        // takes the pot without a showdown
+        let state = HandState::new(1, &[150, 5000, 5000], OPTIONS);
+
+        let state = state.apply(Action::Call).unwrap(); // UTG, all-in for 150
+        let state = state.apply(Action::Fold).unwrap(); // SB
+        let next = state.apply(Action::Fold).unwrap(); // BB
+
+        assert_eq!(next.street, Street::Complete);
+        assert_settled(&next, &[450, 4900, 4800]);
+    }
+
+    #[test]
+    fn an_all_in_caller_gets_a_showdown_when_others_fold() {
+        // seat 0 raises to 500, seat 1 calls all-in for 300, seat 2 folds —
+        // the hand must run out rather than being awarded to seat 0
+        let holes = deck(
+            &[("Ks", "Kh"), ("As", "Ah"), ("Qs", "Qh")],
+            &["2c", "7d", "9c", "3s", "8h"],
+        );
+        let state = deal(holes, &[5000, 300, 5000]);
+
+        let state = state.apply(Action::Raise { to: 500 }).unwrap(); // UTG
+        let state = state.apply(Action::Call).unwrap(); // SB, all-in for 300
+        let state = state.apply(Action::Fold).unwrap(); // BB
+
+        assert_eq!(state.street, Street::Flop); // runout, not an instant award
+
+        let next = check_around(&state, Street::Complete);
+
+        assert_settled(&next, &[4700, 800, 4800]); // aces take the main pot, the kings' extra 200 returns
     }
 
     #[test]
