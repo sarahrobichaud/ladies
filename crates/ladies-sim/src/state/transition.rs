@@ -1,6 +1,9 @@
-use std::fmt;
+use std::{
+    collections::{HashMap, hash_map::Entry},
+    fmt,
+};
 
-use ladies_core::{Card, Hand, evaluate};
+use ladies_core::{Card, Hand, HandValue, evaluate};
 
 use super::HandState;
 use crate::state::{Chips, Seat, player::Status};
@@ -167,6 +170,7 @@ fn advance_street(mutation: &mut HandState) {
 fn award_showdown(mutation: &mut HandState) {
     let pot: Chips = mutation.players.iter().map(|p| p.committed).sum();
 
+    let mut results: HashMap<HandValue, Vec<Seat>> = HashMap::new();
     let mut winner: Option<(Seat, ladies_core::HandValue)> = None;
     for (seat, player) in mutation.players.iter().enumerate() {
         if !player.can_win_pot() {
@@ -182,13 +186,35 @@ fn award_showdown(mutation: &mut HandState) {
         let hand = Hand::new(cards).expect("hole + board are seven distinct cards");
         let value = evaluate(&hand);
 
+        match results.entry(value) {
+            Entry::Vacant(e) => {
+                e.insert(vec![seat]);
+            }
+            Entry::Occupied(mut e) => {
+                e.get_mut().push(seat);
+            }
+        }
+
         if winner.as_ref().is_none_or(|(_, best)| value > *best) {
             winner = Some((seat, value));
         }
     }
 
-    let (winner_seat, _) = winner.expect("a hand reaching showdown has at least one participant");
-    mutation.players[winner_seat].stack += pot;
+    let best_hand = results
+        .keys()
+        .max()
+        .copied()
+        .expect("Theres should be at least one hand during showdown");
+
+    let winners: Vec<(Seat, HandValue)> = results[&best_hand]
+        .iter()
+        .map(|&s| (s, best_hand))
+        .collect();
+
+    let pot = pot / winners.len() as u64;
+    for (seat, _) in winners {
+        mutation.players[seat].stack += pot;
+    }
 
     for p in &mut mutation.players {
         p.committed = 0;
@@ -374,8 +400,6 @@ mod tests {
         Card::from_str(s).expect("valid card")
     }
 
-    /// Plays a checked-around hand up to the river: preflop call-call-check,
-    /// then three checks per street. The river round is left open.
     fn walk_to_river(state: &HandState) -> HandState {
         let state = state.apply(Action::Call).unwrap(); // UTG
         let state = state.apply(Action::Call).unwrap(); // SB
@@ -569,5 +593,41 @@ mod tests {
         assert_eq!(next.street, Street::Flop);
         assert_eq!(next.players[0].committed, OPTIONS.blinds.big);
         assert_eq!(next.players[1].committed, OPTIONS.blinds.big);
+    }
+
+    /// Seats 0 and 2 hold equal pairs of aces, seat 1 kings — seats 0 and 2 split
+    fn equalHandDeck() -> Vec<Card> {
+        vec![
+            card("As"),
+            card("Ah"), // seat 0 — aces
+            card("Ks"),
+            card("Kh"), // seat 1 — kings
+            card("Ad"),
+            card("Ac"), // seat 2 — aces, equal to seat 0
+            card("2c"),
+            card("7d"),
+            card("9c"),
+            card("3s"),
+            card("8h"), // junk board — no flush or straight possible
+        ]
+    }
+
+    #[test]
+    fn pot_splits_when_best_hands_are_equal() {
+        let state = HandState::from_deck(equalHandDeck(), &[5000; 3], OPTIONS);
+        let state = walk_to_river(&state);
+        assert_eq!(state.pot(), 600);
+
+        let state = state.apply(Action::Check).unwrap();
+        let state = state.apply(Action::Check).unwrap();
+        let next = state.apply(Action::Check).unwrap();
+
+        assert_eq!(next.street, Street::Complete);
+
+        assert!(next.is_hand_over());
+        assert_eq!(next.players[0].stack, 5100); // aces split the pot — 4800 + 300
+        assert_eq!(next.players[1].stack, 4800); // kings lose
+        assert_eq!(next.players[2].stack, 5100); // aces split the pot — 4800 + 300
+        assert_eq!(next.pot(), 0);
     }
 }
