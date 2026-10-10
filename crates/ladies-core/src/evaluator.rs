@@ -242,7 +242,7 @@ fn straight_high(counts: &[u8; RANKS.len()]) -> Option<Rank> {
 mod tests {
     use std::str::FromStr;
 
-    use crate::{Category::Pair, hand::Hand};
+    use crate::hand::Hand;
 
     use super::*;
 
