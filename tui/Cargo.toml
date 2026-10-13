@@ -4,4 +4,8 @@ version.workspace = true
 edition.workspace = true
 
 [dependencies]
+crossterm = { workspace = true }
+ratatui = { workspace = true }
 ladies-core = { workspace = true }
+ladies-session = { workspace = true }
+ladies-sim = { workspace = true }

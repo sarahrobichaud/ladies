@@ -8,5 +8,8 @@ members = ["crates/*", "tui"]
 
 [workspace.dependencies]
 rand = { version = "0.10.3", default-features = false, features = ["std", "std_rng"] }
+crossterm = "0.29"
+ratatui = "0.30"
 ladies-core = { path = "crates/ladies-core" }
 ladies-sim = { path = "crates/ladies-sim" }
+ladies-session = { path = "crates/ladies-session" }
