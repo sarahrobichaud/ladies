@@ -76,6 +76,7 @@ impl HandState {
 
         for player in &mut players {
             player.needs_action = player.can_play();
+            player.can_raise = player.can_play();
         }
 
         Self {
@@ -179,6 +180,7 @@ mod tests {
             hole: [Card::from_str("Ad").unwrap(), Card::from_str("Kd").unwrap()],
             status,
             needs_action: false,
+            can_raise: false,
         }
     }
 

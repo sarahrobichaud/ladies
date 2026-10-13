@@ -92,6 +92,7 @@ fn advance_street(mutation: &mut HandState) {
     mutation.to_act = next_active_from(mutation.positions.button, &mutation.players);
     for p in &mut mutation.players {
         p.needs_action = p.can_play();
+        p.can_raise = p.can_play();
     }
 }
 

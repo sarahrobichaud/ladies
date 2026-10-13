@@ -80,6 +80,7 @@ mod tests {
             hole: [Card::from_str("As").unwrap(), Card::from_str("Ks").unwrap()],
             status,
             needs_action: false,
+            can_raise: false,
         }
     }
 

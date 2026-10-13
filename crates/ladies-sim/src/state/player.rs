@@ -16,6 +16,7 @@ pub struct Player {
     pub(super) hole: [Card; 2],
     pub(super) status: Status,
     pub(super) needs_action: bool,
+    pub(super) can_raise: bool,
 }
 
 impl Player {
@@ -27,6 +28,7 @@ impl Player {
             hole,
             status: Status::Active,
             needs_action: false,
+            can_raise: true,
         }
     }
 
