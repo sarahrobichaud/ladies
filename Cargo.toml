@@ -4,9 +4,9 @@ edition = "2024"
 
 [workspace]
 resolver = "3"
-members = ["crates/*"]
+members = ["crates/*", "tui"]
 
 [workspace.dependencies]
-rand = "0.10.3"
+rand = { version = "0.10.3", default-features = false, features = ["std", "std_rng"] }
 ladies-core = { path = "crates/ladies-core" }
 ladies-sim = { path = "crates/ladies-sim" }

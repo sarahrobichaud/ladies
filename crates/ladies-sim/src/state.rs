@@ -2,7 +2,7 @@ use ladies_core::{Card, StandardDeck};
 use rand::{SeedableRng, rngs::StdRng};
 
 pub use blinds::Blinds;
-pub use player::Player;
+pub use player::{Player, Status};
 pub use pot::Pot;
 pub use transition::{Action, IllegalAction, Street};
 

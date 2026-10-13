@@ -51,4 +51,26 @@ impl Player {
             self.status = Status::AllIn;
         }
     }
+
+    pub fn stack(&self) -> Chips {
+        self.stack
+    }
+    pub fn bet(&self) -> Chips {
+        self.bet
+    }
+    pub fn committed(&self) -> Chips {
+        self.committed
+    }
+    pub fn hole(&self) -> &[Card; 2] {
+        &self.hole
+    }
+    pub fn status(&self) -> Status {
+        self.status
+    }
+    pub fn needs_action(&self) -> bool {
+        self.needs_action
+    }
+    pub fn can_raise(&self) -> bool {
+        self.can_raise
+    }
 }
