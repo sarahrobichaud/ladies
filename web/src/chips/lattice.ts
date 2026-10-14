@@ -1,3 +1,4 @@
+import { CHIP_RADIUS } from '../engine/primitives';
 import type { Point, Size, Slot } from './types';
 
 // Staggered circle-slot lattice: every other row offset half a spacing so
@@ -5,7 +6,7 @@ import type { Point, Size, Slot } from './types';
 // slot equidistant from its six neighbours — a circle packing.
 export const SLOT_SPACING = 52;
 export const SLOT_ROW_HEIGHT = 45;
-export const CHIP_RADIUS = 22; // matches the 44px chips
+export { CHIP_RADIUS }; // matches the 44px chips; single-sourced in the engine
 
 export function slotPosition(slot: Slot): Point {
   return {

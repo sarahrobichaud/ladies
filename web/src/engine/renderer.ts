@@ -3,31 +3,24 @@
 // batch per primitive kind; all math is CSS px, the viewport is device px.
 
 import { Batch, createGL, createProgram, type InstanceAttr } from './gl';
-import type {
-  ChipItem,
-  EdgeChipItem,
-  GlyphItem,
-  PanelItem,
-  RingItem,
-  SceneItem,
-} from './primitives';
+import { CHIP_RADIUS, CHIP_SQUASH, type ChipItem, type GlyphItem, type PanelItem, type RingItem, type SceneItem, type WallItem } from './primitives';
 import {
   CHIP_FS,
   CHIP_VS,
-  EDGE_FS,
-  EDGE_VS,
   PANEL_FS,
   PANEL_VS,
   RING_FS,
   RING_VS,
   TEXT_FS,
   TEXT_VS,
+  WALL_FS,
+  WALL_VS,
 } from './shaders';
 import { GlyphAtlas, type FontFace } from './text';
 
 type Kind = SceneItem['kind'];
 
-const STRIDE: Record<Kind, number> = { ring: 17, chip: 15, edge: 8, panel: 15, glyph: 11 };
+const STRIDE: Record<Kind, number> = { ring: 18, chip: 15, wall: 12, panel: 15, glyph: 11 };
 
 const CHIP_ATTRS: InstanceAttr[] = [
   { name: 'iCenter', size: 2 },
@@ -37,20 +30,23 @@ const CHIP_ATTRS: InstanceAttr[] = [
   { name: 'iDim', size: 1 },
   { name: 'iHighlight', size: 4 },
 ];
-const EDGE_ATTRS: InstanceAttr[] = [
-  { name: 'iCenter', size: 2 },
-  { name: 'iExtent', size: 2 },
-  { name: 'iFace', size: 3 },
-  { name: 'iDim', size: 1 },
-];
 const RING_ATTRS: InstanceAttr[] = [
   { name: 'iCenter', size: 2 },
   { name: 'iExtent', size: 2 },
   { name: 'iRadii', size: 2 },
   { name: 'iHalfWidth', size: 1 },
   { name: 'iDash', size: 2 },
+  { name: 'iSoft', size: 1 },
   { name: 'iStroke', size: 4 },
   { name: 'iFill', size: 4 },
+];
+const WALL_ATTRS: InstanceAttr[] = [
+  { name: 'iCenter', size: 2 },
+  { name: 'iExtent', size: 2 },
+  { name: 'iFace', size: 3 },
+  { name: 'iSpot', size: 3 },
+  { name: 'iDim', size: 1 },
+  { name: 'iThick', size: 1 },
 ];
 const PANEL_ATTRS: InstanceAttr[] = [
   { name: 'iCenter', size: 2 },
@@ -68,8 +64,8 @@ const TEXT_ATTRS: InstanceAttr[] = [
 ];
 
 // Quad half-extents with an AA margin beyond the outermost SDF feature.
-const CHIP_EXTENT = 26; // highlight ring reaches 25
-const EDGE_EXTENT = 24; // bottom arc reaches 23
+const CHIP_EX = CHIP_RADIUS + 4; // highlight ring reaches R + 3 in circle space
+const CHIP_EY = (CHIP_RADIUS + 4) * CHIP_SQUASH + 1.5;
 
 type Pass = {
   program: WebGLProgram;
@@ -106,7 +102,7 @@ class Renderer {
     this.passes = {
       ring: make(RING_VS, RING_FS, RING_ATTRS),
       chip: make(CHIP_VS, CHIP_FS, CHIP_ATTRS),
-      edge: make(EDGE_VS, EDGE_FS, EDGE_ATTRS),
+      wall: make(WALL_VS, WALL_FS, WALL_ATTRS),
       panel: make(PANEL_VS, PANEL_FS, PANEL_ATTRS),
       glyph: make(TEXT_VS, TEXT_FS, TEXT_ATTRS),
     };
@@ -117,7 +113,7 @@ class Renderer {
     this.scratch = {
       ring: new Float32Array(256 * STRIDE.ring),
       chip: new Float32Array(256 * STRIDE.chip),
-      edge: new Float32Array(256 * STRIDE.edge),
+      wall: new Float32Array(256 * STRIDE.wall),
       panel: new Float32Array(256 * STRIDE.panel),
       glyph: new Float32Array(256 * STRIDE.glyph),
     };
@@ -168,7 +164,7 @@ class Renderer {
     switch (kind) {
       case 'ring': {
         const it = item as RingItem;
-        const extent = Math.max(it.rx, it.ry) + it.width / 2 + 1;
+        const extent = Math.max(it.rx, it.ry) + it.width / 2 + it.soft + 1;
         out[o] = it.x;
         out[o + 1] = it.y;
         out[o + 2] = extent;
@@ -178,31 +174,34 @@ class Renderer {
         out[o + 6] = it.width / 2;
         out[o + 7] = it.dash[0];
         out[o + 8] = it.dash[1];
-        out.set(it.stroke, o + 9);
-        out.set(it.fill ?? [0, 0, 0, 0], o + 13);
-        return o + 17;
+        out[o + 9] = it.soft;
+        out.set(it.stroke, o + 10);
+        out.set(it.fill ?? [0, 0, 0, 0], o + 14);
+        return o + 18;
       }
       case 'chip': {
         const it = item as ChipItem;
         out[o] = it.x;
         out[o + 1] = it.y;
-        out[o + 2] = CHIP_EXTENT;
-        out[o + 3] = CHIP_EXTENT;
+        out[o + 2] = CHIP_EX;
+        out[o + 3] = CHIP_EY;
         out.set(it.face, o + 4);
         out.set(it.spot, o + 7);
         out[o + 10] = it.dim;
         out.set(it.highlight ?? [0, 0, 0, 0], o + 11);
         return o + 15;
       }
-      case 'edge': {
-        const it = item as EdgeChipItem;
+      case 'wall': {
+        const it = item as WallItem;
         out[o] = it.x;
         out[o + 1] = it.y;
-        out[o + 2] = EDGE_EXTENT;
-        out[o + 3] = EDGE_EXTENT;
+        out[o + 2] = CHIP_RADIUS + 1.5;
+        out[o + 3] = CHIP_RADIUS * CHIP_SQUASH + it.thickness + 1.5;
         out.set(it.face, o + 4);
-        out[o + 7] = it.dim;
-        return o + 8;
+        out.set(it.spot, o + 7);
+        out[o + 10] = it.dim;
+        out[o + 11] = it.thickness;
+        return o + 12;
       }
       case 'panel': {
         const it = item as PanelItem;

@@ -5,8 +5,15 @@
 export type RGB = readonly [number, number, number];
 export type RGBA = readonly [number, number, number, number];
 
+// Chip geometry shared by the shaders, the scene, and hit-testing. The
+// radius matches the 44px chips of the DOM palette; the squash is the
+// oblique "camera" elevation (1 = top-down, 0 = edge-on).
+export const CHIP_RADIUS = 22;
+export const CHIP_SQUASH = 0.62;
+
 // Dashed/solid ellipse ring (slot lattice, landing ghost, cut plane, merge
-// halo). dash [0, 0] = solid; fill null = outline only.
+// halo, soft contact shadows). dash [0, 0] = solid; fill null = outline
+// only; soft > 0 fades the fill edge over that many px (shadows).
 export type RingItem = {
   kind: 'ring';
   x: number;
@@ -17,10 +24,12 @@ export type RingItem = {
   dash: readonly [number, number];
   stroke: RGBA;
   fill: RGBA | null;
+  soft: number;
 };
 
-// Chip face, top-down: SDF disc with edge spots, dashed inner ring, rim,
-// bottom arc, optional highlight ring. dim multiplies all chip colors.
+// Chip face, top-down but vertically squashed: SDF disc with edge spots,
+// dashed inner ring, rim, bottom arc, optional highlight ring. dim
+// multiplies all chip colors.
 export type ChipItem = {
   kind: 'chip';
   x: number;
@@ -31,13 +40,17 @@ export type ChipItem = {
   highlight: RGBA | null;
 };
 
-// Chip seen edge-on: solid disc with dark edge dashes and a bottom arc.
-export type EdgeChipItem = {
-  kind: 'edge';
+// Chip wall seen edge-on: the cylinder side between the top face and the
+// base, with painted edge trims (stripes aligned with the face spots),
+// cylinder shading, and a groove line at the base.
+export type WallItem = {
+  kind: 'wall';
   x: number;
   y: number;
   face: RGB;
+  spot: RGB;
   dim: number;
+  thickness: number;
 };
 
 // Rounded-rect panel (hover value badge).
@@ -66,5 +79,5 @@ export type GlyphItem = {
   color: RGB;
 };
 
-export type SceneItem = RingItem | ChipItem | EdgeChipItem | PanelItem | GlyphItem;
+export type SceneItem = RingItem | ChipItem | WallItem | PanelItem | GlyphItem;
 export type Scene = SceneItem[];

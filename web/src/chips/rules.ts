@@ -1,3 +1,4 @@
+import { CHIP_SQUASH } from '../engine/primitives';
 import { allSlots, CHIP_RADIUS, slotPosition } from './lattice';
 import type { Board, Point, Slot, Stack, StackId } from './types';
 
@@ -19,22 +20,29 @@ export function stackTopOffset(stack: Stack): number {
 
 export type Pick = { stackId: StackId; depth: number; isTop: boolean };
 
-// Column hit-test against resting geometry. A stack is a vertical column
-// of chips STACK_LIFT apart; the topmost chip whose disc contains the
-// point wins, so preview animation can never shift the target under the
-// cursor.
+// Hit-test against resting geometry. A chip is a squashed face ellipse
+// plus its wall band below; the topmost chip whose face or wall contains
+// the point wins, so preview animation can never shift the target under
+// the cursor.
 export function pickAt(board: Board, point: Point): Pick | null {
   for (const stack of board.stacks) {
     const { x: sx, y: sy } = slotPosition(stack.slot);
     if (Math.abs(sx - point.x) > CHIP_RADIUS) continue;
-    if (point.y < sy - stackTopOffset(stack) - CHIP_RADIUS) continue;
-    if (point.y > sy + CHIP_RADIUS) continue;
     const size = stackSize(stack);
+    if (point.y < sy - stackTopOffset(stack) - CHIP_RADIUS * CHIP_SQUASH) continue;
+    if (point.y > sy + CHIP_RADIUS * CHIP_SQUASH + STACK_LIFT) continue;
     for (let depth = size - 1; depth >= 0; depth--) {
       const cy = sy - depth * STACK_LIFT;
       const dx = sx - point.x;
-      const dy = cy - point.y;
-      if (dx * dx + dy * dy <= CHIP_RADIUS * CHIP_RADIUS) {
+      const dy = point.y - cy;
+      // Face ellipse.
+      const ey = dy / CHIP_SQUASH;
+      if (dx * dx + ey * ey <= CHIP_RADIUS * CHIP_RADIUS) {
+        return { stackId: stack.id, depth, isTop: depth === size - 1 };
+      }
+      // Wall band below the face belongs to this chip.
+      const h = Math.sqrt(Math.max(0, CHIP_RADIUS * CHIP_RADIUS - dx * dx)) * CHIP_SQUASH;
+      if (dy > h && dy <= h + STACK_LIFT) {
         return { stackId: stack.id, depth, isTop: depth === size - 1 };
       }
     }
