@@ -126,21 +126,20 @@ fn next_seat(seat: Seat, table_size: usize) -> Seat {
     (seat + 1) % table_size
 }
 
-fn next_active_from(seat: Seat, players: &[Player]) -> Seat {
+fn next_active_from(seat: Seat, players: &[Player]) -> Option<Seat> {
     let table_size = players.len();
 
     (0..table_size)
         .map(|offset| next_seat(seat + offset, table_size))
         .find(|&s| players[s].can_play())
-        .expect("No active player remains")
 }
 
 fn first_to_act_preflop(sb_seat: Seat, bb_seat: Seat, players: &[Player]) -> Seat {
     if players.len() == 2 {
-        sb_seat
-    } else {
-        next_active_from(bb_seat, players)
+        return sb_seat;
     }
+
+    next_active_from(bb_seat, players).expect("a dealt hand has a player who can act")
 }
 
 fn get_blind_seats(button: Seat, players: &[Player]) -> (Seat, Seat) {
@@ -215,9 +214,13 @@ mod tests {
             player(Status::Folded),
         ];
 
-        assert_eq!(next_active_from(1, &players), 2);
-        assert_eq!(next_active_from(2, &players), 4);
-        assert_eq!(next_active_from(4, &players), 2);
+        assert_eq!(next_active_from(1, &players), Some(2));
+        assert_eq!(next_active_from(2, &players), Some(4));
+        assert_eq!(next_active_from(4, &players), Some(2));
+
+        let all_in = [player(Status::AllIn), player(Status::AllIn)];
+
+        assert_eq!(next_active_from(0, &all_in), None);
     }
 
     #[test]

@@ -21,6 +21,7 @@ pub enum Action {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IllegalAction {
+    PlayerCannotAct,
     CheckFacingBet,
     RaiseBelowMinRaise { min: Chips },
     RaiseExceedsStack { max: Chips },
@@ -30,6 +31,9 @@ pub enum IllegalAction {
 impl fmt::Display for IllegalAction {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::PlayerCannotAct => {
+                write!(f, "this player cannot act")
+            }
             Self::CheckFacingBet => write!(f, "cannot check when facing a bet"),
             Self::RaiseBelowMinRaise { min } => write!(f, "raise must reach at least {min}"),
             Self::RaiseExceedsStack { max } => {
@@ -81,6 +85,10 @@ pub(super) fn apply_action(
     seat: Seat,
     action: Action,
 ) -> Result<&HandState, IllegalAction> {
+    if !mutation.players[seat].can_play() {
+        return Err(IllegalAction::PlayerCannotAct);
+    }
+
     let resolved = resolve(mutation, seat, action)?;
 
     match resolved {
@@ -243,6 +251,44 @@ mod fold_tests {
         let next = state.apply(Action::Fold).unwrap();
 
         assert_eq!(next.to_act, state.positions.sb);
+    }
+}
+
+#[cfg(test)]
+mod turn_tests {
+    use crate::state::{Action, HandState, IllegalAction, Street};
+
+    use super::super::fixtures::OPTIONS;
+
+    #[test]
+    fn a_folded_player_cannot_be_asked_to_act() {
+        // two folds end the hand; the stale turn points at the folded SB
+        let state = HandState::new(1, &[5000; 3], OPTIONS);
+        let state = state.apply(Action::Fold).unwrap(); // UTG
+        let next = state.apply(Action::Fold).unwrap(); // SB, hand over
+
+        assert_eq!(next.street, Street::Complete);
+        assert!(matches!(
+            next.apply(Action::Check),
+            Err(IllegalAction::PlayerCannotAct)
+        ));
+    }
+
+    #[test]
+    fn an_all_in_player_cannot_be_asked_to_act() {
+        // everyone all-in preflop runs out; the stale turn points at the
+        // all-in BB
+        let state = HandState::new(1, &[1100, 1000, 500], OPTIONS);
+
+        let state = state.apply(Action::Raise { to: 1100 }).unwrap(); // UTG, all-in
+        let state = state.apply(Action::AllIn).unwrap(); // SB, all-in call
+        let next = state.apply(Action::AllIn).unwrap(); // BB, all-in call, runout
+
+        assert_eq!(next.street, Street::Complete);
+        assert!(matches!(
+            next.apply(Action::Check),
+            Err(IllegalAction::PlayerCannotAct)
+        ));
     }
 }
 

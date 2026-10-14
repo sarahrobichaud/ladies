@@ -37,11 +37,24 @@ pub(super) fn advance_turn(
         return Ok(mutation);
     }
 
-    mutation.to_act = next_active_from(seat, &mutation.players);
-
     if is_round_closed(mutation) {
         advance_street(mutation);
+
+        if mutation.street == Street::Complete {
+            return Ok(mutation);
+        }
+
+        // everyone left has matched the bet and is all-in: no one can act,
+        // so deal the rest of the board and show the hand down
+        if !mutation.players.iter().any(|p| p.can_play()) {
+            run_out_board(mutation);
+        }
+
+        return Ok(mutation);
     }
+
+    mutation.to_act = next_active_from(seat, &mutation.players)
+        .expect("an unclosed round has another player to act");
 
     Ok(mutation)
 }
@@ -51,10 +64,6 @@ fn is_fold_win(state: &HandState) -> bool {
 }
 
 fn is_round_closed(state: &HandState) -> bool {
-    if !state.players.iter().any(|p| p.can_play()) {
-        todo!("Implement all-in runout");
-    }
-
     state
         .players
         .iter()
@@ -89,10 +98,19 @@ fn advance_street(mutation: &mut HandState) {
     mutation.board.extend(cards);
     mutation.street = next_street;
 
-    mutation.to_act = next_active_from(mutation.positions.button, &mutation.players);
     for p in &mut mutation.players {
         p.needs_action = p.can_play();
         p.can_raise = p.can_play();
+    }
+
+    if let Some(seat) = next_active_from(mutation.positions.button, &mutation.players) {
+        mutation.to_act = seat;
+    }
+}
+
+fn run_out_board(mutation: &mut HandState) {
+    while mutation.street < Street::Complete {
+        advance_street(mutation);
     }
 }
 
@@ -152,6 +170,7 @@ mod flow_tests {
 
     use super::super::fixtures::{
         OPTIONS, aces_kings_queens_deck, assert_settled, check_around, check_until, deal, deck,
+        kings_queens_aces_jacks_deck,
     };
 
     #[test]
@@ -264,6 +283,50 @@ mod flow_tests {
 
         assert_eq!(all.len(), 52);
         assert_eq!(state.deck.len(), 41); // 52 − 6 holes − 5 board
+    }
+
+    #[test]
+    fn an_all_in_runout_deals_the_remaining_board_and_shows_down() {
+        // everyone is all-in preflop: the board must run out and the hand
+        // must show down without anyone being asked to act again
+        let state = deal(aces_kings_queens_deck(), &[1100, 1000, 500]);
+
+        let state = state.apply(Action::Raise { to: 1100 }).unwrap(); // UTG, all-in
+        let state = state.apply(Action::AllIn).unwrap(); // SB, all-in call for 1000
+        let next = state.apply(Action::AllIn).unwrap(); // BB, all-in call for 500
+
+        assert_eq!(next.street, Street::Complete);
+        assert_eq!(next.board.len(), 5);
+        assert_settled(&next, &[2600, 0, 0]); // aces take every layer
+    }
+
+    #[test]
+    fn a_river_all_in_shows_down_without_a_runout() {
+        // the last river action puts everyone all-in: the hand must complete
+        // instead of reaching for a next actor that does not exist
+        let state = deal(aces_kings_queens_deck(), &[5000; 3]);
+        let state = check_until(&state, Street::River);
+
+        let state = state.apply(Action::Raise { to: 4800 }).unwrap(); // SB, all-in
+        let state = state.apply(Action::Fold).unwrap(); // BB
+        let next = state.apply(Action::Call).unwrap(); // UTG, all-in call
+
+        assert_eq!(next.street, Street::Complete);
+        assert_settled(&next, &[10200, 0, 4800]); // aces take the pot, BB's dead blind stays
+    }
+
+    #[test]
+    fn postflop_action_skips_folded_and_all_in_players() {
+        // seat 1 folds the SB and seat 2 is all-in from a short blind: the
+        // first active player left of the button is seat 3, not the next seat
+        let state = deal(kings_queens_aces_jacks_deck(), &[5000, 5000, 150, 5000]);
+
+        let state = state.apply(Action::Call).unwrap(); // UTG
+        let state = state.apply(Action::Call).unwrap(); // button
+        let next = state.apply(Action::Fold).unwrap(); // SB closes the round
+
+        assert_eq!(next.street, Street::Flop);
+        assert_eq!(next.to_act, 3);
     }
 
     #[test]
