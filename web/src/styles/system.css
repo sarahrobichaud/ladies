@@ -1,0 +1,149 @@
+/*
+ * Ladies design system — mid-century modern, blue & orange.
+ *
+ * Semantic tokens (canvas, surface, ink, blue, orange, ...) are defined as
+ * raw CSS variables and mapped into Tailwind via `@theme inline`, so
+ * utilities like `bg-surface` or `text-orange` follow the active theme.
+ *
+ * Theme is controlled by `data-theme="light|dark"` on <html>; when the
+ * attribute is absent, the system preference is used.
+ */
+
+/* ---------------------------------------------------------------------------
+ * Fonts — swappable
+ *
+ * Everything reads --heading-font / --body-font. Pick a preset with
+ * <html data-font="retro|clean|classic">, or edit the variables directly.
+ * ------------------------------------------------------------------------- */
+
+:root {
+  /* retro (default): Fraunces headings + Jost body, loaded in index.html */
+  --heading-font: 'Fraunces', 'Iowan Old Style', Georgia, serif;
+  --body-font: 'Jost', 'Avenir Next', 'Century Gothic', system-ui, sans-serif;
+  --mono-font: ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, monospace;
+}
+
+/* clean: retro serif headings over the platform UI font */
+[data-font='clean'] {
+  --body-font: system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+}
+
+/* classic: no webfonts at all */
+[data-font='classic'] {
+  --heading-font: Georgia, 'Times New Roman', serif;
+  --body-font: system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+}
+
+/* ---------------------------------------------------------------------------
+ * Color tokens
+ * ------------------------------------------------------------------------- */
+
+:root {
+  color-scheme: light;
+
+  --canvas: #f6efe2; /* warm cream page background */
+  --surface: #fdf9f0; /* cards */
+  --raised: #ffffff; /* inputs, playing cards, popovers */
+  --ink: #24303c; /* primary text */
+  --muted: #6b7a87; /* secondary text */
+  --line: #e5dac4; /* borders */
+
+  --blue: #2a6f97; /* primary accent */
+  --blue-strong: #1b4965; /* hover / high-emphasis text on tint */
+  --blue-tint: #dcebf4; /* soft backgrounds */
+
+  --orange: #e76f51; /* secondary accent */
+  --orange-strong: #c14e2e;
+  --orange-tint: #fbe4d8;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --canvas: #0f1720;
+  --surface: #16212d;
+  --raised: #1d2a38;
+  --ink: #ece5d8;
+  --muted: #94a4b2;
+  --line: #2b3b4b;
+
+  --blue: #7cb8dd;
+  --blue-strong: #a9d0ea;
+  --blue-tint: #1d3d52;
+
+  --orange: #ef8a5f;
+  --orange-strong: #f5a37f;
+  --orange-tint: #45291c;
+}
+
+/* Follow the system until an explicit choice is made. */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']):not([data-theme='dark']) {
+    color-scheme: dark;
+
+    --canvas: #0f1720;
+    --surface: #16212d;
+    --raised: #1d2a38;
+    --ink: #ece5d8;
+    --muted: #94a4b2;
+    --line: #2b3b4b;
+
+    --blue: #7cb8dd;
+    --blue-strong: #a9d0ea;
+    --blue-tint: #1d3d52;
+
+    --orange: #ef8a5f;
+    --orange-strong: #f5a37f;
+    --orange-tint: #45291c;
+  }
+}
+
+/* ---------------------------------------------------------------------------
+ * Tailwind theme mapping
+ * ------------------------------------------------------------------------- */
+
+@theme inline {
+  --font-sans: var(--body-font);
+  --font-heading: var(--heading-font);
+  --font-mono: var(--mono-font);
+
+  --color-canvas: var(--canvas);
+  --color-surface: var(--surface);
+  --color-raised: var(--raised);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+
+  --color-blue: var(--blue);
+  --color-blue-strong: var(--blue-strong);
+  --color-blue-tint: var(--blue-tint);
+
+  --color-orange: var(--orange);
+  --color-orange-strong: var(--orange-strong);
+  --color-orange-tint: var(--orange-tint);
+}
+
+/* `dark:` utilities follow the explicit data-theme attribute. */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/* ---------------------------------------------------------------------------
+ * Base
+ * ------------------------------------------------------------------------- */
+
+@layer base {
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--heading-font);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  ::selection {
+    background-color: var(--orange-tint);
+    color: var(--orange-strong);
+  }
+}
