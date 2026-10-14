@@ -1,10 +1,11 @@
-import { Fragment, useEffect, useRef, useState } from 'react';
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { PointerEvent as ReactPointerEvent } from 'react';
 import { Link } from 'react-router';
-import { CHIP_TIERS, Chip } from '../components/chip';
+import { CHIP_TIER_VARS } from '../components/chip-palette';
+import { Chip } from '../components/chip';
 import { CATALOG } from '../chips/catalog';
 import { chipLabel } from '../snapshot';
-import { CHIP_RADIUS, SLOT_ROW_HEIGHT, SLOT_SPACING, slotPosition } from '../chips/lattice';
+import { allSlots, CHIP_RADIUS, slotPosition } from '../chips/lattice';
 import { parseRuns } from '../chips/notation';
 import {
   PREVIEW_LIFT,
@@ -33,171 +34,352 @@ import {
   takeFromTray,
   totalValue,
 } from '../chips/model';
-import type { Board, Point, Slot, Stack } from '../chips/types';
+import type { Board, Point, Slot } from '../chips/types';
 import { formatChips } from '../snapshot';
 
 const SPAWN_THRESHOLD = 6; // pointer travel before a tray press becomes a drag
 
 type Drag = { pointerId: number; grabX: number; grabY: number };
 type Spawn = { kind: number; pointerId: number; startX: number; startY: number };
+type Lift = { stackId: number; depth: number; value: number };
 
-// A stack at rest renders as ONE entity — a column of perspective ovals:
-// every chip is a 44×28 oval stacked STACK_LIFT apart, painted bottom-up so
-// each oval shows only its bottom crescent behind the chip above. The
-// segment's exposed top chip renders as a full face (pattern + label); the
-// rest render as edge ovals (base color, dark edge dashes, contact shadow).
-// The hover cut splits the column into lower/upper segments with a ghost
-// chip between them; the upper segment rides the preview lift.
-function StackView({
-  board,
-  stack,
-  hover,
-  dim,
-  highlight,
-  onGrab,
-}: {
-  board: Board;
-  stack: Stack;
-  hover: Pick | null;
-  dim: boolean;
-  highlight: boolean;
-  onGrab: (e: ReactPointerEvent<HTMLDivElement>) => void;
-}) {
+// --- canvas palette ---------------------------------------------------------
+
+type TierColors = { face: string; spot: string; text: string };
+type CanvasColors = {
+  tiers: TierColors[];
+  onFelt: string;
+  canvasBg: string;
+  line: string;
+  ink: string;
+  orange: string;
+  orangeTint: string;
+  blue: string;
+  bodyFont: string;
+};
+
+// Resolve the theme tokens the chip renderer needs. Re-run on theme changes.
+function resolveCanvasColors(): CanvasColors {
+  const style = getComputedStyle(document.documentElement);
+  const v = (name: string) => style.getPropertyValue(name).trim();
+  return {
+    tiers: CHIP_TIER_VARS.map(({ face, spot, text }) => ({
+      face: v(face),
+      spot: v(spot),
+      text: v(text),
+    })),
+    onFelt: v('--on-felt'),
+    canvasBg: v('--canvas'),
+    line: v('--line'),
+    ink: v('--ink'),
+    orange: v('--orange'),
+    orangeTint: v('--orange-tint'),
+    blue: v('--blue'),
+    bodyFont: v('--body-font'),
+  };
+}
+
+function withAlpha(color: string, alpha: number): string {
+  const m = color.match(/^#([0-9a-f]{6})$/i);
+  if (!m) return color;
+  const n = parseInt(m[1], 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
+
+// Darken a resolved hex color (the dim effect — filters don't exist here,
+// and alpha would make stacks see-through).
+function shade(color: string, factor: number): string {
+  const m = color.match(/^#([0-9a-f]{6})$/i);
+  if (!m) return color;
+  const n = parseInt(m[1], 16);
+  const r = Math.round(((n >> 16) & 255) * factor);
+  const g = Math.round(((n >> 8) & 255) * factor);
+  const b = Math.round((n & 255) * factor);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+// --- chip drawing -----------------------------------------------------------
+
+// A chip's edge seen edge-on: solid base circle, dark edge dashes, and a
+// dark bottom-rim arc that doubles as the border with the crescent below.
+function drawEdgeChip(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  palette: TierColors,
+) {
+  ctx.fillStyle = palette.face;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 22, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = 'rgb(0 0 0 / 0.5)';
+  for (const dx of [-9, -3, 3, 9]) {
+    ctx.beginPath();
+    ctx.ellipse(cx + dx, cy + 19, 3, 2, 0, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.strokeStyle = 'rgb(0 0 0 / 0.45)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 22, 0, Math.PI);
+  ctx.stroke();
+}
+
+// A chip's face seen top-down: fully round — base, edge spots, dashed
+// inner ring, hairline rim with a stronger bottom arc, label.
+function drawFaceChip(
+  ctx: CanvasRenderingContext2D,
+  cx: number,
+  cy: number,
+  palette: TierColors,
+  colors: CanvasColors,
+  label: string | null,
+  highlighted: boolean,
+) {
+  ctx.fillStyle = palette.face;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 22, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = palette.spot;
+  for (let k = 0; k < 8; k++) {
+    const a = (k / 8) * Math.PI * 2 + Math.PI / 8;
+    ctx.beginPath();
+    ctx.ellipse(cx + Math.cos(a) * 17.5, cy + Math.sin(a) * 17.5, 3, 1.5, a, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.save();
+  ctx.setLineDash([4, 3]);
+  ctx.strokeStyle = withAlpha(palette.spot, 0.8);
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 12.5, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+  ctx.strokeStyle = 'rgb(0 0 0 / 0.4)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 22, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(cx, cy, 22, 0, Math.PI);
+  ctx.stroke();
+  if (highlighted) {
+    ctx.save();
+    ctx.strokeStyle = colors.blue;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(cx, cy, 24, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+  if (label) {
+    ctx.fillStyle = palette.text;
+    ctx.font = `600 11px ${colors.bodyFont}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(label, cx, cy + 0.5);
+  }
+}
+
+function drawStack(
+  ctx: CanvasRenderingContext2D,
+  board: Board,
+  stack: Parameters<typeof stackSize>[0],
+  o: {
+    hover: Pick | null;
+    lift: Lift | null;
+    colors: CanvasColors;
+    dimFactor: number;
+    highlight: boolean;
+  },
+) {
   const { x, y } = slotPosition(stack.slot);
   const size = stackSize(stack);
-  const hovered = hover?.stackId === stack.id ? hover : null;
-  const cut = hovered && !hovered.isTop && hovered.depth > 0 ? hovered.depth : null;
-  const topHover = hovered?.isTop === true;
-
-  // Depth → kind, for oval coloring.
   const kindAt: number[] = [];
   for (const run of stack.runs) {
     for (let i = 0; i < run.count; i++) kindAt.push(run.kind);
   }
 
-  // Segments: the whole stack at rest; lower/upper halves in a cut preview.
-  // Each segment's exposed top chip renders as a full face oval.
-  const segments: { start: number; top: number; lifted: boolean }[] =
-    cut === null
-      ? [{ start: 0, top: size - 1, lifted: false }]
-      : [
-          { start: 0, top: cut - 1, lifted: false },
-          { start: cut, top: size - 1, lifted: true },
-        ];
+  const hovered = o.hover?.stackId === stack.id ? o.hover : null;
+  const liftState = o.lift?.stackId === stack.id ? o.lift : null;
+  // The cut structure rides the lift state so the preview decays smoothly
+  // after the pointer leaves.
+  const cut = liftState?.depth ?? null;
+  const lift = liftState?.value ?? 0;
+  const topHover = hovered?.isTop === true;
 
-  return (
-    <div
-      onPointerDown={onGrab}
-      className={`absolute ${dim ? 'brightness-50 saturate-50' : ''} ${
-        highlight ? 'brightness-110' : ''
-      }`}
-      style={{
-        left: x,
-        top: y,
-        zIndex: 10,
-        transition: 'filter 160ms ease',
-      }}
-    >
-      {segments.map((seg, si) => {
-        const lift = seg.lifted ? PREVIEW_LIFT : 0;
+  const pal = (kind: number): TierColors => {
+    const p = o.colors.tiers[kind % o.colors.tiers.length];
+    return o.dimFactor === 1
+      ? p
+      : {
+          face: shade(p.face, o.dimFactor),
+          spot: shade(p.spot, o.dimFactor),
+          text: shade(p.text, o.dimFactor),
+        };
+  };
 
-        // Chips bottom → top; DOM order = paint order, so each oval covers
-        // the one beneath it and only its bottom crescent shows.
-        const chips: { depth: number; kind: number; face: boolean }[] = [];
-        for (let d = seg.start; d <= seg.top; d++) {
-          chips.push({ depth: d, kind: kindAt[d], face: d === seg.top });
-        }
+  for (let d = 0; d < size; d++) {
+    const palette = pal(kindAt[d]);
+    const cx = x;
+    const cy = y - d * STACK_LIFT - (cut !== null && d >= cut ? lift : 0);
+    if (cut !== null && d === cut) {
+      // Ghost dashed circle at the cut plane, under the lifted upper half.
+      ctx.save();
+      ctx.setLineDash([4, 4]);
+      ctx.strokeStyle = o.colors.orange;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(cx, y - cut * STACK_LIFT, CHIP_RADIUS, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.restore();
+    }
+    // Each segment's exposed top chip renders as a full face.
+    const isSegmentTop = d === size - 1 || (cut !== null && d === cut - 1);
+    const label = isSegmentTop ? chipLabel(board.catalog[kindAt[d]].value) : null;
+    if (isSegmentTop) {
+      drawFaceChip(ctx, cx, cy, palette, o.colors, label, topHover && d === size - 1);
+    } else {
+      drawEdgeChip(ctx, cx, cy, palette);
+    }
+  }
+}
 
-        return (
-          <Fragment key={si}>
-            {si > 0 && (
-              <div
-                className="pointer-events-none absolute rounded-full border-2 border-dashed border-orange bg-orange-tint/20"
-                style={{
-                  position: 'absolute',
-                  left: -CHIP_RADIUS,
-                  top: -((seg.start - 1) * STACK_LIFT) - 14,
-                  width: CHIP_RADIUS * 2,
-                  height: 28,
-                }}
-              />
-            )}
-            <div
-              className="absolute"
-              style={{
-                left: -CHIP_RADIUS,
-                top: -(seg.top * STACK_LIFT) - 14,
-                transform: `translateY(-${lift}px)`,
-                transition: 'transform 160ms ease',
-              }}
-            >
-              {chips.map((chip) => {
-                const palette = CHIP_TIERS[chip.kind % CHIP_TIERS.length];
-                const top = (seg.top - chip.depth) * STACK_LIFT;
-                if (chip.face) {
-                  return (
-                    <div
-                      key={chip.depth}
-                      className={`poker-chip absolute ${
-                        topHover && chip.depth === size - 1 ? 'ring-2 ring-blue brightness-110' : ''
-                      }`}
-                      style={
-                        {
-                          position: 'absolute',
-                          zIndex: 0,
-                          left: 0,
-                          top,
-                          width: CHIP_RADIUS * 2,
-                          height: 28,
-                          fontSize: 11,
-                          '--chip-face': palette.face,
-                          '--chip-spot': palette.spot,
-                        } as CSSProperties
-                      }
-                    >
-                      <span
-                        className="relative z-10 font-semibold tabular-nums"
-                        style={{ color: palette.text }}
-                      >
-                        {chipLabel(board.catalog[chip.kind].value)}
-                      </span>
-                    </div>
-                  );
-                }
-                return (
-                  <div
-                    key={chip.depth}
-                    style={{
-                      position: 'absolute',
-                      left: 0,
-                      top,
-                      width: CHIP_RADIUS * 2,
-                      height: 28,
-                      borderRadius: '50%',
-                      // Chip-stack edge: dark dashes (the edge-spot pattern
-                      // seen edge-on) over the base color, with a contact
-                      // shadow at the crescent's bottom edge.
-                      backgroundImage: `
-                        radial-gradient(2.5px 2px at 50% 25%, rgb(0 0 0 / 0.5) 0 100%, transparent 100%),
-                        linear-gradient(${palette.face}, ${palette.face})
-                      `,
-                      backgroundSize: `9px 6px, 100% 100%`,
-                      backgroundRepeat: 'repeat, no-repeat',
-                      boxShadow: 'inset 0 -2px 3px rgb(0 0 0 / 0.4)',
-                    }}
-                  />
-                );
-              })}
-            </div>
-          </Fragment>
-        );
-      })}
-    </div>
-  );
+// --- felt rendering ---------------------------------------------------------
+
+function drawFelt(
+  ctx: CanvasRenderingContext2D,
+  o: {
+    board: Board;
+    handPos: Point | null;
+    drag: Drag | null;
+    hover: Pick | null;
+    lift: Lift | null;
+    colors: CanvasColors;
+    time: number;
+  },
+) {
+  const { board, handPos, drag, hover, lift, colors, time } = o;
+  ctx.clearRect(0, 0, board.felt.w, board.felt.h);
+
+  // Slot lattice.
+  ctx.save();
+  ctx.setLineDash([3, 5]);
+  ctx.lineWidth = 1;
+  ctx.strokeStyle = withAlpha(colors.onFelt, 0.16);
+  for (const slot of allSlots(board.felt)) {
+    const { x, y } = slotPosition(slot);
+    ctx.beginPath();
+    ctx.arc(x, y, CHIP_RADIUS - 1, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+
+  const landing = board.hand && handPos ? landingFor(board, handPos) : null;
+  const mergeTarget =
+    landing?.type === 'combine'
+      ? (board.stacks.find((s) => s.id === landing.stackId) ?? null)
+      : null;
+
+  // Landing ghost: where the hand's bottom chip will sit.
+  if (landing && landing.type !== 'none') {
+    const combine = landing.type === 'combine';
+    ctx.save();
+    ctx.setLineDash([4, 4]);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = combine ? colors.orange : withAlpha(colors.onFelt, 0.6);
+    if (combine) {
+      ctx.fillStyle = withAlpha(colors.orangeTint, 0.2);
+      ctx.beginPath();
+      ctx.arc(landing.ring.x, landing.ring.y, CHIP_RADIUS, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.beginPath();
+    ctx.arc(landing.ring.x, landing.ring.y, CHIP_RADIUS, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Merge halo: pulses around the stack the hand will combine with.
+  if (mergeTarget) {
+    const { x, y } = slotPosition(mergeTarget.slot);
+    const n = stackSize(mergeTarget);
+    const pulse = 0.5 + 0.5 * Math.sin(time / 180);
+    ctx.save();
+    ctx.globalAlpha = 0.45 + 0.55 * pulse;
+    ctx.strokeStyle = colors.orange;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.ellipse(
+      x,
+      y - ((n - 1) * STACK_LIFT) / 2,
+      CHIP_RADIUS + 6 + pulse * 1.5,
+      14 + ((n - 1) * STACK_LIFT) / 2 + 6 + pulse * 1.5,
+      0,
+      0,
+      Math.PI * 2,
+    );
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  // Stacks.
+  for (const stack of board.stacks) {
+    const isMergeTarget = mergeTarget?.id === stack.id;
+    drawStack(ctx, board, stack, {
+      hover,
+      lift,
+      colors,
+      dimFactor: drag !== null && !isMergeTarget ? 0.5 : 1,
+      highlight: isMergeTarget,
+    });
+  }
+
+  // Hand — materialized individual chips.
+  if (board.hand && handPos) {
+    board.hand.chips.forEach((chip, i) => {
+      const palette = colors.tiers[chip.kind % colors.tiers.length];
+      drawFaceChip(
+        ctx,
+        handPos.x,
+        handPos.y - i * STACK_LIFT,
+        palette,
+        colors,
+        chipLabel(board.catalog[chip.kind].value),
+        false,
+      );
+    });
+  }
+
+  // Hovered stack value badge.
+  if (hover && !drag) {
+    const stack = board.stacks.find((s) => s.id === hover.stackId);
+    if (stack) {
+      const { x, y } = slotPosition(stack.slot);
+      const by = Math.max(16, y - stackTopOffset(stack) - 14 - 10);
+      const text = formatChips(runsValue(stack.runs, board.catalog));
+      ctx.font = `600 12px ${colors.bodyFont}`;
+      const tw = ctx.measureText(text).width;
+      ctx.save();
+      ctx.fillStyle = withAlpha(colors.canvasBg, 0.9);
+      ctx.beginPath();
+      ctx.roundRect(x - tw / 2 - 8, by - 9, tw + 16, 18, 9);
+      ctx.fill();
+      ctx.strokeStyle = colors.line;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+      ctx.fillStyle = colors.ink;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(text, x, by);
+      ctx.restore();
+    }
+  }
 }
 
 export function ChipLab() {
-  const canvasRef = useRef<HTMLDivElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [board, setBoard] = useState<Board>(() => createBoard(CATALOG, { w: 0, h: 0 }));
   const [handPos, setHandPos] = useState<Point | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
@@ -208,16 +390,34 @@ export function ChipLab() {
 
   const canvasRect = () => canvasRef.current?.getBoundingClientRect() ?? null;
 
-  // Wheel sizing reads the gesture state through a ref (native listener,
-  // registered once); the capacity/uniformity rules live in the model op,
-  // so there is no constant to go stale here.
-  const gestureRef = useRef({ drag });
-  gestureRef.current = { drag };
+  const total = totalValue(board);
+
+  // Mirror the scene for the rAF loop and the native wheel listener. The
+  // assignment runs in an effect (after render) so events always see the
+  // latest committed state.
+  const sceneRef = useRef({ board, handPos, drag, spawn, hover });
+  useEffect(() => {
+    sceneRef.current = { board, handPos, drag, spawn, hover };
+  });
+  const liftRef = useRef<Lift | null>(null);
+  const colorsRef = useRef(resolveCanvasColors());
+  const dprRef = useRef(1);
+
+  // Theme/font switches change the resolved tokens.
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      colorsRef.current = resolveCanvasColors();
+    });
+    observer.observe(document.documentElement, { attributes: true });
+    return () => observer.disconnect();
+  }, []);
+
+  // Wheel sizing (native listener; capacity rules live in the model op).
   useEffect(() => {
     const el = canvasRef.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
-      if (!gestureRef.current.drag || e.deltaY === 0) return;
+      if (!sceneRef.current.drag || e.deltaY === 0) return;
       e.preventDefault();
       setBoard((b) => sizeHand(b, e.deltaY < 0 ? 1 : -1));
     };
@@ -225,26 +425,53 @@ export function ChipLab() {
     return () => el.removeEventListener('wheel', onWheel);
   }, []);
 
-  // Felt size feeds the model (the lattice needs it) — measured, not
-  // stored twice.
+  // Felt size → model + canvas bitmap (DPR-aware).
   useEffect(() => {
     const el = canvasRef.current;
     if (!el) return;
-    const observer = new ResizeObserver(([entry]) =>
-      setBoard((b) => setFelt(b, { w: entry.contentRect.width, h: entry.contentRect.height })),
-    );
+    const observer = new ResizeObserver(([entry]) => {
+      const felt = { w: entry.contentRect.width, h: entry.contentRect.height };
+      setBoard((b) => setFelt(b, felt));
+      const dpr = window.devicePixelRatio || 1;
+      el.width = Math.max(1, Math.round(felt.w * dpr));
+      el.height = Math.max(1, Math.round(felt.h * dpr));
+      dprRef.current = dpr;
+    });
     observer.observe(el);
     return () => observer.disconnect();
   }, []);
 
-  const total = totalValue(board);
+  // Render loop.
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (!el) return;
+    const ctx = el.getContext('2d');
+    if (!ctx) return;
+    let raf = 0;
+    const loop = (time: number) => {
+      const { board, handPos, drag, hover } = sceneRef.current;
+      ctx.setTransform(dprRef.current, 0, 0, dprRef.current, 0, 0);
 
-  // Landing: the single authority for preview and commit.
-  const landing = board.hand && handPos ? landingFor(board, handPos) : null;
-  const mergeTarget =
-    landing?.type === 'combine'
-      ? (board.stacks.find((s) => s.id === landing.stackId) ?? null)
-      : null;
+      // Lift animation: grows while a cut is hovered, decays after.
+      const cutHover = hover && !hover.isTop && hover.depth > 0 ? hover : null;
+      let ls = liftRef.current;
+      if (cutHover) {
+        if (!ls || ls.stackId !== cutHover.stackId || ls.depth !== cutHover.depth) {
+          ls = { stackId: cutHover.stackId, depth: cutHover.depth, value: 0 };
+        }
+        ls.value += (PREVIEW_LIFT - ls.value) * 0.25;
+      } else if (ls) {
+        ls.value *= 0.7;
+        if (ls.value < 0.5) ls = null;
+      }
+      liftRef.current = ls;
+
+      drawFelt(ctx, { board, handPos, drag, hover, lift: ls, colors: colorsRef.current, time });
+      raf = requestAnimationFrame(loop);
+    };
+    raf = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf);
+  }, []);
 
   const cancelGesture = () => {
     setDrag(null);
@@ -255,7 +482,7 @@ export function ChipLab() {
   // Pointer moves: drag the hand, promote a tray press to a drag, or track
   // hover. Shared by the canvas and the tray chips — whoever holds pointer
   // capture receives the moves.
-  const onPointerMove = (e: ReactPointerEvent<HTMLDivElement>) => {
+  const onPointerMove = (e: ReactPointerEvent<Element>) => {
     if (drag && drag.pointerId === e.pointerId) {
       const rect = canvasRect();
       if (!rect) return;
@@ -277,7 +504,7 @@ export function ChipLab() {
     }
   };
 
-  const onPointerUp = (e: ReactPointerEvent<HTMLDivElement>) => {
+  const onPointerUp = (e: ReactPointerEvent<Element>) => {
     if (drag && drag.pointerId === e.pointerId) {
       setDrag(null);
       const rect = canvasRect();
@@ -307,39 +534,36 @@ export function ChipLab() {
     }
   };
 
-  const grabStack =
-    (stackId: number) => (e: ReactPointerEvent<HTMLDivElement>) => {
-      e.preventDefault();
-      // Capture on the canvas: the picked stack may unmount (e.g. taking
-      // its only chip), and the capture must survive that.
-      canvasRef.current?.setPointerCapture(e.pointerId);
-      const rect = canvasRect();
-      if (!rect) return;
-      const point = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-      const pick = pickAt(board, point);
-      if (!pick || pick.stackId !== stackId) return;
-      const stack = board.stacks.find((s) => s.id === stackId);
-      if (!stack) return;
-      const { x: sx, y: sy } = slotPosition(stack.slot);
-      const previewLift =
-        hover && hover.stackId === stackId && !hover.isTop ? PREVIEW_LIFT : 0;
-      const visual = { x: sx, y: sy - pick.depth * STACK_LIFT - previewLift };
-      const next =
-        e.button === 2
-          ? pickStack(board, stackId)
-          : pick.isTop
-            ? pickTop(board, stackId)
-            : pickFrom(board, stackId, pick.depth);
-      if (next === board) return;
-      setBoard(next);
-      setHover(null);
-      setHandPos(visual);
-      setDrag({
-        pointerId: e.pointerId,
-        grabX: e.clientX - (rect.left + visual.x),
-        grabY: e.clientY - (rect.top + visual.y),
-      });
-    };
+  const onCanvasPointerDown = (e: ReactPointerEvent<HTMLCanvasElement>) => {
+    e.preventDefault();
+    canvasRef.current?.setPointerCapture(e.pointerId);
+    const rect = canvasRect();
+    if (!rect) return;
+    const point = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    const pick = pickAt(board, point);
+    if (!pick) return;
+    const stack = board.stacks.find((s) => s.id === pick.stackId);
+    if (!stack) return;
+    const { x: sx, y: sy } = slotPosition(stack.slot);
+    const previewLift =
+      liftRef.current && liftRef.current.stackId === pick.stackId ? liftRef.current.value : 0;
+    const visual = { x: sx, y: sy - pick.depth * STACK_LIFT - previewLift };
+    const next =
+      e.button === 2
+        ? pickStack(board, stack.id)
+        : pick.isTop
+          ? pickTop(board, stack.id)
+          : pickFrom(board, stack.id, pick.depth);
+    if (next === board) return;
+    setBoard(next);
+    setHover(null);
+    setHandPos(visual);
+    setDrag({
+      pointerId: e.pointerId,
+      grabX: e.clientX - (rect.left + visual.x),
+      grabY: e.clientY - (rect.top + visual.y),
+    });
+  };
 
   const onPointerDownTray =
     (kind: number) => (e: ReactPointerEvent<HTMLDivElement>) => {
@@ -446,154 +670,21 @@ export function ChipLab() {
         </div>
 
         {/* Felt canvas */}
-        <div
-          ref={canvasRef}
-          onContextMenu={(e) => e.preventDefault()}
-          onPointerMove={onPointerMove}
-          onPointerUp={onPointerUp}
-          onPointerCancel={cancelGesture}
-          onPointerLeave={() => setHover(null)}
-          className="pov-felt relative min-h-0 flex-1 overflow-hidden rounded-xl border border-line"
-        >
-          {/* Slot lattice, clipped to where chips can land */}
-          {board.felt.w > 0 && (
-            <svg className="pointer-events-none absolute inset-0 h-full w-full" aria-hidden>
-              <defs>
-                <pattern
-                  id="slot-lattice"
-                  width={SLOT_SPACING}
-                  height={SLOT_ROW_HEIGHT * 2}
-                  patternUnits="userSpaceOnUse"
-                >
-                  <g
-                    fill="none"
-                    stroke="var(--on-felt)"
-                    strokeOpacity="0.16"
-                    strokeWidth="1"
-                    strokeDasharray="3 5"
-                  >
-                    <circle cx={0} cy={0} r={CHIP_RADIUS - 1} />
-                    <circle cx={SLOT_SPACING} cy={0} r={CHIP_RADIUS - 1} />
-                    <circle cx={SLOT_SPACING / 2} cy={SLOT_ROW_HEIGHT} r={CHIP_RADIUS - 1} />
-                    <circle cx={0} cy={SLOT_ROW_HEIGHT * 2} r={CHIP_RADIUS - 1} />
-                    <circle cx={SLOT_SPACING} cy={SLOT_ROW_HEIGHT * 2} r={CHIP_RADIUS - 1} />
-                  </g>
-                </pattern>
-                <clipPath id="slot-clip">
-                  <rect
-                    x={CHIP_RADIUS}
-                    y={CHIP_RADIUS}
-                    width={Math.max(0, board.felt.w - CHIP_RADIUS * 2)}
-                    height={Math.max(0, board.felt.h - CHIP_RADIUS * 2)}
-                  />
-                </clipPath>
-              </defs>
-              <rect width="100%" height="100%" fill="url(#slot-lattice)" clipPath="url(#slot-clip)" />
-            </svg>
-          )}
-
-          {/* Landing ghost: where the hand's bottom chip will sit */}
-          {landing && landing.type !== 'none' && (
-            <div
-              className={`pointer-events-none absolute rounded-full border-2 border-dashed ${
-                landing.type === 'combine'
-                  ? 'border-orange bg-orange-tint/20'
-                  : 'border-on-felt/60'
-              }`}
-              style={{
-                left: landing.ring.x,
-                top: landing.ring.y,
-                width: CHIP_RADIUS * 2,
-                height: CHIP_RADIUS * 2,
-                transform: 'translate(-50%, -50%)',
-                zIndex: 9,
-              }}
-            />
-          )}
-
-          {/* Merge halo: pulses around the stack the hand will combine with */}
-          {mergeTarget &&
-            (() => {
-              const n = stackSize(mergeTarget);
-              const { x, y } = slotPosition(mergeTarget.slot);
-              return (
-                <div
-                  className="stack-pulse pointer-events-none absolute rounded-full border-2 border-orange"
-                  style={{
-                    left: x,
-                    top: y - ((n - 1) * STACK_LIFT) / 2,
-                    width: CHIP_RADIUS * 2 + 12,
-                    height: CHIP_RADIUS * 2 + (n - 1) * STACK_LIFT + 12,
-                    zIndex: 9,
-                  }}
-                />
-              );
-            })()}
-
-          {/* Stacks — compressed entities */}
-          {board.stacks.map((stack) => (
-            <StackView
-              key={stack.id}
-              board={board}
-              stack={stack}
-              hover={hover}
-              dim={drag !== null && mergeTarget?.id !== stack.id}
-              highlight={mergeTarget?.id === stack.id}
-              onGrab={grabStack(stack.id)}
-            />
-          ))}
-
-          {/* Hand — materialized individual chips */}
-          {board.hand &&
-            handPos &&
-            board.hand.chips.map((chip, i) => {
-              const palette = CHIP_TIERS[chip.kind % CHIP_TIERS.length];
-              return (
-                <div
-                  key={chip.id}
-                  className="poker-chip absolute"
-                  style={
-                    {
-                      position: 'absolute',
-                      left: handPos.x - CHIP_RADIUS,
-                      top: handPos.y - i * STACK_LIFT - 14,
-                      width: CHIP_RADIUS * 2,
-                      height: 28,
-                      fontSize: 11,
-                      '--chip-face': palette.face,
-                      '--chip-spot': palette.spot,
-                      zIndex: 50,
-                      transition: 'filter 160ms ease',
-                    } as CSSProperties
-                  }
-                >
-                  <span
-                    className="relative z-10 font-semibold tabular-nums"
-                    style={{ color: palette.text }}
-                  >
-                    {chipLabel(board.catalog[chip.kind].value)}
-                  </span>
-                </div>
-              );
-            })}
-
-          {/* Hovered stack value badge */}
-          {hover &&
-            (() => {
-              const stack = board.stacks.find((s) => s.id === hover.stackId);
-              if (!stack) return null;
-              const { x, y } = slotPosition(stack.slot);
-              const topY = y - stackTopOffset(stack);
-              return (
-                <div
-                  className="pointer-events-none absolute z-40 -translate-x-1/2 -translate-y-1/2 rounded-full border border-line bg-canvas/90 px-2 py-0.5 text-xs font-semibold tabular-nums text-ink shadow"
-                  style={{ left: x, top: Math.max(14, topY - CHIP_RADIUS - 12) }}
-                >
-                  {formatChips(runsValue(stack.runs, board.catalog))}
-                </div>
-              );
-            })()}
-
+        <div className="relative min-h-0 flex-1 overflow-hidden rounded-xl border border-line">
+          <canvas
+            ref={canvasRef}
+            className="pov-felt absolute inset-0 h-full w-full"
+            style={{
+              cursor: drag ? 'grabbing' : hover ? 'grab' : 'default',
+              touchAction: 'none',
+            }}
+            onContextMenu={(e) => e.preventDefault()}
+            onPointerDown={onCanvasPointerDown}
+            onPointerMove={onPointerMove}
+            onPointerUp={onPointerUp}
+            onPointerCancel={cancelGesture}
+            onPointerLeave={() => setHover(null)}
+          />
           {board.stacks.length === 0 && !board.hand && (
             <p className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-on-felt/50">
               Empty felt — add chips from the tray

@@ -1,18 +1,6 @@
 import type { CSSProperties } from 'react';
 import { chipLabel } from '../snapshot';
-
-// Chip face palettes by tier, mapped to theme tokens so both color schemes
-// read correctly. Tiers are ranks among the rack's denominations, not
-// absolute values. Exported for the compressed stack renderer, which draws
-// run layers with the same palette.
-export const CHIP_TIERS = [
-  { face: 'var(--raised)', spot: 'var(--muted)', text: 'var(--ink)' },
-  { face: 'var(--orange)', spot: 'var(--canvas)', text: 'var(--canvas)' },
-  { face: 'var(--felt-deep)', spot: 'var(--on-felt)', text: 'var(--on-felt)' },
-  { face: 'var(--ink)', spot: 'var(--canvas)', text: 'var(--canvas)' },
-  { face: 'var(--blue)', spot: 'var(--canvas)', text: 'var(--canvas)' },
-  { face: 'var(--wood-light)', spot: 'var(--canvas)', text: 'var(--ink)' },
-];
+import { CHIP_TIERS } from './chip-palette';
 
 export function Chip({
   value,
