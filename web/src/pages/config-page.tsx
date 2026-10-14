@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router';
+import { Link, useNavigate } from 'react-router';
 import { WasmSession, wasmReady } from '../session';
 import { setSession } from '../session-store';
 
@@ -153,6 +153,12 @@ function SessionConfigCard({
       >
         {disabled ? 'Loading engine…' : 'Start session'}
       </button>
+      <Link
+        to="/chips"
+        className="mt-3 block text-center text-sm text-muted hover:text-orange"
+      >
+        Chip lab
+      </Link>
     </section>
   );
 }

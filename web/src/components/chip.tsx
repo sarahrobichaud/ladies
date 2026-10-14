@@ -10,6 +10,7 @@ const CHIP_TIERS = [
   { face: 'var(--felt-deep)', spot: 'var(--on-felt)', text: 'var(--on-felt)' },
   { face: 'var(--ink)', spot: 'var(--canvas)', text: 'var(--canvas)' },
   { face: 'var(--blue)', spot: 'var(--canvas)', text: 'var(--canvas)' },
+  { face: 'var(--wood-light)', spot: 'var(--canvas)', text: 'var(--ink)' },
 ];
 
 export function Chip({
