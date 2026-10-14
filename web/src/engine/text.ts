@@ -158,12 +158,16 @@ export class GlyphAtlas {
       return { u0: 0, v0: 0, u1: 0, v1: 0, dx: 0, dy: 0, w: 0, h: 0, advance };
     }
 
-    const ax = this.penX + 1;
-    const ay = this.penY + 1;
+    // Draw so the ink's top-left lands at (penX + 1, penY + 1), which is
+    // where the UV coordinates below expect it. With textBaseline 'middle',
+    // the origin sits at the vertical midpoint, so we must shift down by
+    // actualBoundingBoxAscent to avoid clipping at the top of the atlas tile.
+    const ax = this.penX + 1 + m.actualBoundingBoxLeft;
+    const ay = this.penY + 1 + m.actualBoundingBoxAscent;
     this.ctx.fillText(ch, ax, ay);
 
-    const x0 = ax - m.actualBoundingBoxLeft;
-    const y0 = ay - m.actualBoundingBoxAscent;
+    const x0 = ax - m.actualBoundingBoxLeft; // = penX + 1
+    const y0 = ay - m.actualBoundingBoxAscent; // = penY + 1
     const g: Glyph = {
       u0: x0 / this.size,
       v0: y0 / this.size,
