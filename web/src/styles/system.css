@@ -270,3 +270,27 @@
   user-select: none;
   -webkit-user-drag: none;
 }
+
+/* Merge-target pulse: halo around the stack a dragged group will land on. */
+@keyframes stack-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: translate(-50%, -50%) scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.07);
+  }
+}
+
+.stack-pulse {
+  animation: stack-pulse 1.1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stack-pulse {
+    animation: none;
+    opacity: 1;
+  }
+}
