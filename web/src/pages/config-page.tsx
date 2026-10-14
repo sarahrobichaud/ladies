@@ -63,7 +63,7 @@ function SessionConfigCard({
   disabled: boolean;
   onStart: (config: SessionConfig) => void;
 }) {
-  const [players, setPlayers] = useState(3);
+  const [players, setPlayers] = useState(6);
   // Draft text (what the user sees) plus last valid values (what we submit).
   const [chipsText, setChipsText] = useState('5000');
   const [smallText, setSmallText] = useState('100');

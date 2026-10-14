@@ -3,7 +3,7 @@ import { Link, Navigate } from 'react-router';
 import { getSession } from '../session-store';
 import type { SessionSnapshot } from '../snapshot';
 import { formatChips } from '../snapshot';
-import { PlayerCard, PlayingCard } from '../components/player-card';
+import { PokerTable } from '../components/poker-table';
 
 export function TablePage() {
   const session = getSession();
@@ -34,26 +34,14 @@ export function TablePage() {
         </Link>
       </header>
 
-      {hand && hand.board.length > 0 && (
-        <div className="flex gap-1.5">
-          {hand.board.map((card, i) => (
-            <PlayingCard key={i} card={card} />
-          ))}
-        </div>
-      )}
-
       {hand && (
-        <div className="flex flex-wrap justify-center gap-4">
-          {hand.players.map((player, seat) => (
-            <PlayerCard
-              key={seat}
-              seat={seat}
-              player={player}
-              isButton={seat === hand.button}
-              isToAct={seat === hand.to_act}
-            />
-          ))}
-        </div>
+        <PokerTable
+          players={hand.players}
+          button={hand.button}
+          toAct={hand.to_act}
+          board={hand.board}
+          pot={hand.pot}
+        />
       )}
     </div>
   );
