@@ -7,12 +7,16 @@
 // vertically by CHIP_SQUASH, and each chip carries a cylinder wall (the
 // `wall` program) so stacks read as real 3D objects. Feature SDFs run in
 // unsquashed "circle space" (q = (x, y / SQUASH)) so they stay circular
-// in chip space.
+// in chip space. The face's edge spots and the wall's stripes share the
+// same angular paint (W / SPOT_INNER), so the trims read as one continuous
+// pattern wrapping over the rim.
 
 import { CHIP_RADIUS, CHIP_SQUASH } from './primitives';
 
 const R = `${CHIP_RADIUS}.0`;
 const SQUASH = `${CHIP_SQUASH}`;
+const W = '0.08'; // rad — half-width of edge spots and wall stripes
+const SPOT_INNER = '0.72'; // × R — inner radius of the face spots
 
 // --- chip face ---------------------------------------------------------------
 
@@ -53,12 +57,10 @@ out vec4 frag;
 
 const float R = ${R};
 const float SQUASH = ${SQUASH};
+const float W = ${W};
+const float SPOT_INNER = ${SPOT_INNER} * R;
 const float PI_4 = 0.7853981633974483;
 const float PI_8 = 0.39269908169872414;
-
-float sdEllipse(vec2 p, vec2 ab) {
-  return (length(p / ab) - 1.0) * min(ab.x, ab.y);
-}
 
 void main() {
   // Circle space: unsquash y so chip-space features stay circular.
@@ -71,27 +73,30 @@ void main() {
 
   float body = 1.0 - smoothstep(R - aa, R + aa, r);
 
-  // 8 edge spots, elongated along the radius.
-  float spots = 1e9;
-  for (int k = 0; k < 8; k++) {
+  // 8 edge spots: rim wedges (abs(atan) mirrors the upper half onto the
+  // lower, so four angles cover all eight), continuous with the stripes
+  // painted on the wall below the rim.
+  float angAbs = abs(atan(q.y, q.x));
+  float aaA = max(fwidth(angAbs), 1e-4);
+  float spots = 0.0;
+  for (int k = 0; k < 4; k++) {
     float a = float(k) * PI_4 + PI_8;
-    vec2 dir = vec2(cos(a), sin(a));
-    vec2 t = mat2(dir.x, -dir.y, dir.y, dir.x) * (q - dir * R * 0.795);
-    spots = min(spots, sdEllipse(t, vec2(R * 0.136, R * 0.068)));
+    float d = abs(angAbs - a);
+    spots = max(spots, 1.0 - smoothstep(W - aaA, W + aaA, d));
   }
-  rgb = mix(rgb, spot, (1.0 - smoothstep(-aa, aa, spots)) * body);
+  spots *= smoothstep(SPOT_INNER - aa, SPOT_INNER + aa, r) * body;
+  rgb = mix(rgb, spot, spots);
 
   // Dashed inner ring: width 1.5, dash 4/3.
-  float arc = abs(atan(q.y, q.x)) * R * 0.568;
+  float arc = abs(angAbs) * R * 0.568;
   float dash = step(mod(arc, 7.0), 4.0);
   float ringA = (1.0 - smoothstep(-aa, aa, abs(r - R * 0.568) - 0.75)) * dash * body;
   rgb = mix(rgb, spot, ringA * 0.8);
 
-  // Hairline rim (1px, black 0.4) + stronger bottom arc (2px, black 0.45);
-  // the bottom arc doubles as the seam where the face meets the wall.
-  float rimA = (1.0 - smoothstep(-aa, aa, abs(r - R) - 0.5)) * 0.4;
+  // Hairline rim + bottom arc seam, both reduced to be less prominent.
+  float rimA = (1.0 - smoothstep(-aa, aa, abs(r - R) - 0.5)) * 0.18;
   rgb = mix(rgb, vec3(0.0), rimA);
-  float arcA = (1.0 - smoothstep(-aa, aa, abs(r - R) - 1.0)) * step(0.0, vLocal.y) * 0.45;
+  float arcA = (1.0 - smoothstep(-aa, aa, abs(r - R) - 1.0)) * smoothstep(-aa, aa, vLocal.y) * 0.20;
   rgb = mix(rgb, vec3(0.0), arcA);
 
   // Highlight ring (merge target).
@@ -141,40 +146,49 @@ out vec4 frag;
 
 const float R = ${R};
 const float SQUASH = ${SQUASH};
+const float W = ${W};
 const float PI_4 = 0.7853981633974483;
 const float PI_8 = 0.39269908169872414;
-const float STRIPE = 0.1396; // 8 deg half-width
 
 void main() {
+  // Circle space: un-squash y so the elliptical faces become circles.
   vec2 q = vec2(vLocal.x, vLocal.y / SQUASH);
   float T = vThick / SQUASH;
-  float dTop = length(q) - R;
-  float dBot = length(q - vec2(0.0, T)) - R;
-  float aa = max(fwidth(dTop), 1e-4);
 
-  // The wall: inside the base rim circle, outside the top face circle.
-  float wall = (1.0 - smoothstep(-aa, aa, dBot)) * smoothstep(-aa, aa, dTop);
+  // Cylinder wall SDF. In circle space the visible wall band is the strip:
+  //   h(x) <= y <= T + h(x),  |x| <= R,  where h(x) = sqrt(R^2 - x^2).
+  // All three boundaries are combined into one min-SDF so every edge gets
+  // a single clean AA transition with no alpha compounding at corners.
+  float h = sqrt(max(0.0, R * R - q.x * q.x));
+  float dInner = q.y - h;           // +ve below top arc  (into wall)
+  float dOuter = T + h - q.y;       // +ve above base arc (into wall)
+  float dSide  = R - abs(q.x);      // +ve inside side tangents
+  float dWall  = min(min(dInner, dOuter), dSide);
+  float aa = max(fwidth(dWall), 1e-4);
+  float wall = smoothstep(-aa, aa, dWall);
 
-  // Edge trims: 8 stripes around the rim, aligned with the face spots.
-  float ang = atan(q.y, q.x);
-  float aaA = max(fwidth(ang), 1e-4);
+  // Edge trims: stripes keyed to x-position on the rim (acos(x/R)), so
+  // they project straight down rather than following the face's oblique angle.
+  float angAbs = acos(clamp(q.x / R, -1.0, 1.0));
+  float aaA = max(fwidth(angAbs), 1e-4);
   float stripe = 0.0;
-  for (int k = 0; k < 8; k++) {
+  for (int k = 0; k < 4; k++) {
     float a = float(k) * PI_4 + PI_8;
-    float d = abs(ang - a);
-    stripe = max(stripe, 1.0 - smoothstep(STRIPE - aaA, STRIPE + aaA, d));
+    float d = abs(angAbs - a);
+    stripe = max(stripe, 1.0 - smoothstep(W - aaA, W + aaA, d));
   }
 
-  // Cylinder shading: darker toward the silhouette, AO toward the base.
-  float curve = sqrt(max(0.0, 1.0 - (q.x / R) * (q.x / R)));
-  float down = clamp((q.y - sqrt(max(0.0, R * R - q.x * q.x))) / T, 0.0, 1.0);
+  // Cylinder shading: brighter at front (curve), darker toward base (AO).
+  float curve = h / R;
+  float down  = clamp(dInner / max(T, 0.001), 0.0, 1.0);
   vec3 base = mix(vFace, vSpot, stripe) * vDim;
-  base *= 0.58 + 0.20 * curve;
+  base *= 0.60 + 0.28 * curve;
   base *= 1.0 - 0.22 * down;
 
-  // Groove line at the base of this chip's wall — the seam with the chip
-  // below (its wall continues directly beneath).
-  base = mix(base, vec3(0.0), (1.0 - smoothstep(-aa, aa, abs(dBot) - 0.75)) * 0.4);
+  // Groove line at the base seam.
+  float dBot = length(q - vec2(0.0, T)) - R;
+  float groove = (1.0 - smoothstep(-aa, aa, abs(dBot) - 0.5)) * smoothstep(-aa, aa, q.y - T);
+  base = mix(base, vec3(0.0), groove * 0.38);
 
   frag = vec4(base * wall, wall);
 }`;

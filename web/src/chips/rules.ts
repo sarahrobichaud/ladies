@@ -4,7 +4,7 @@ import type { Board, Point, Slot, Stack, StackId } from './types';
 
 // Interaction constants — the feel knobs.
 export const STACK_CAPACITY = 10; // wheel-sizing cap for a uniform hand
-export const STACK_LIFT = 6; // vertical px between chips in a stack
+export const STACK_LIFT = 4; // chip thickness: vertical px between chips in a stack
 export const PREVIEW_LIFT = 10; // hover preview: how far the upper half rises
 export const COMBINE_BAND = 16; // vertical combine band above a stack's top chip
 export const COMBINE_HALF_WIDTH = 20; // horizontal tolerance for the band

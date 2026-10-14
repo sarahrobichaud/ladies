@@ -9,7 +9,7 @@ export type RGBA = readonly [number, number, number, number];
 // radius matches the 44px chips of the DOM palette; the squash is the
 // oblique "camera" elevation (1 = top-down, 0 = edge-on).
 export const CHIP_RADIUS = 22;
-export const CHIP_SQUASH = 0.62;
+export const CHIP_SQUASH = 0.75;
 
 // Dashed/solid ellipse ring (slot lattice, landing ghost, cut plane, merge
 // halo, soft contact shadows). dash [0, 0] = solid; fill null = outline
