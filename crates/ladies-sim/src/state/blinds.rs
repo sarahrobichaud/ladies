@@ -28,6 +28,14 @@ pub struct Blinds {
 }
 
 impl Blinds {
+    pub fn small(&self) -> Chips {
+        self.small
+    }
+
+    pub fn big(&self) -> Chips {
+        self.big
+    }
+
     pub fn new(small: Chips, big: Chips) -> Result<Self, BlindsError> {
         if small == 0 || big == 0 {
             return Err(BlindsError::ZeroBlind);

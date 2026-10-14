@@ -34,7 +34,14 @@ struct SessionSnapshot {
 }
 
 #[derive(Serialize)]
+struct BlindsDto {
+    small: Chips,
+    big: Chips,
+}
+
+#[derive(Serialize)]
 struct HandSnapshot {
+    blinds: BlindsDto,
     street: &'static str,
     to_act: Seat,
     current_bet: Chips,
@@ -129,6 +136,10 @@ impl WasmSession {
         let snapshot = SessionSnapshot {
             stacks: self.inner.stacks().to_vec(),
             hand: self.inner.hand().map(|hand| HandSnapshot {
+                blinds: BlindsDto {
+                    small: hand.blinds.small(),
+                    big: hand.blinds.big(),
+                },
                 street: street_name(&hand.street),
                 to_act: hand.to_act,
                 current_bet: hand.current_bet,

@@ -221,3 +221,52 @@
   border: 2px dashed color-mix(in srgb, var(--on-felt) 28%, transparent);
   box-shadow: inset 0 0 44px var(--felt-vignette);
 }
+
+/* First-person strip at the bottom of the table page: the felt as seen
+   from your seat, lit from the table side (top). */
+.pov-felt {
+  background: radial-gradient(
+    ellipse 120% 90% at 50% -30%,
+    var(--felt) 0%,
+    var(--felt) 50%,
+    var(--felt-deep) 100%
+  );
+  box-shadow: inset 0 6px 30px var(--felt-vignette);
+}
+
+/* ---------------------------------------------------------------------------
+ * Poker chips — edge-spot pattern via conic gradient, dashed inner ring.
+ * Face/spot colors come from --chip-face / --chip-spot inline vars so
+ * denominations can pick a palette tier.
+ * ------------------------------------------------------------------------- */
+
+.poker-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  border-radius: 9999px;
+  background:
+    radial-gradient(circle, var(--chip-face) 0 61%, transparent 61.5%),
+    repeating-conic-gradient(var(--chip-spot) 0 16deg, var(--chip-face) 16deg 48deg);
+  box-shadow:
+    inset 0 -2px 3px rgb(0 0 0 / 0.3),
+    inset 0 2px 2px rgb(255 255 255 / 0.18),
+    0 2px 3px rgb(0 0 0 / 0.3);
+}
+
+.poker-chip::before {
+  content: '';
+  position: absolute;
+  inset: 15%;
+  border-radius: 9999px;
+  border: 2px dashed color-mix(in srgb, var(--chip-spot) 70%, transparent);
+}
+
+/* Draggable pieces: no native drag/scroll interference during gestures. */
+.draggable {
+  touch-action: none;
+  user-select: none;
+  -webkit-user-drag: none;
+}

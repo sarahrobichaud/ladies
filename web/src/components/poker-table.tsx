@@ -39,7 +39,7 @@ export function PokerTable({
   const count = players.length;
 
   return (
-    <div className="relative mx-auto aspect-16/10 w-full max-w-5xl">
+    <div className="relative mx-auto aspect-16/10 max-h-full w-full max-w-5xl">
       {/* Wood rail + stitched felt. The rail's padding leaves a visible
           wood border around the felt; the felt fills the content box. */}
       <div className="wood-rail absolute inset-x-[6%] inset-y-[12%] rounded-[50%] p-[clamp(10px,1.8vw,26px)]">
