@@ -20,7 +20,7 @@ import { GlyphAtlas, type FontFace } from './text';
 
 type Kind = SceneItem['kind'];
 
-const STRIDE: Record<Kind, number> = { ring: 18, chip: 15, wall: 12, panel: 15, glyph: 11 };
+const STRIDE: Record<Kind, number> = { ring: 18, chip: 16, wall: 13, panel: 15, glyph: 11 };
 
 const CHIP_ATTRS: InstanceAttr[] = [
   { name: 'iCenter', size: 2 },
@@ -29,6 +29,7 @@ const CHIP_ATTRS: InstanceAttr[] = [
   { name: 'iSpot', size: 3 },
   { name: 'iDim', size: 1 },
   { name: 'iHighlight', size: 4 },
+  { name: 'iAngle', size: 1 },
 ];
 const RING_ATTRS: InstanceAttr[] = [
   { name: 'iCenter', size: 2 },
@@ -47,6 +48,7 @@ const WALL_ATTRS: InstanceAttr[] = [
   { name: 'iSpot', size: 3 },
   { name: 'iDim', size: 1 },
   { name: 'iThick', size: 1 },
+  { name: 'iAngle', size: 1 },
 ];
 const PANEL_ATTRS: InstanceAttr[] = [
   { name: 'iCenter', size: 2 },
@@ -189,7 +191,8 @@ class Renderer {
         out.set(it.spot, o + 7);
         out[o + 10] = it.dim;
         out.set(it.highlight ?? [0, 0, 0, 0], o + 11);
-        return o + 15;
+        out[o + 15] = it.angle;
+        return o + 16;
       }
       case 'wall': {
         const it = item as WallItem;
@@ -201,7 +204,8 @@ class Renderer {
         out.set(it.spot, o + 7);
         out[o + 10] = it.dim;
         out[o + 11] = it.thickness;
-        return o + 12;
+        out[o + 12] = it.angle;
+        return o + 13;
       }
       case 'panel': {
         const it = item as PanelItem;

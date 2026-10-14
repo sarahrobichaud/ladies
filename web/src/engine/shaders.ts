@@ -29,12 +29,14 @@ in vec3 iFace;
 in vec3 iSpot;
 in float iDim;
 in vec4 iHighlight;
+in float iAngle;
 uniform vec2 uResolution;
 out vec2 vLocal;
 out vec3 vFace;
 out vec3 vSpot;
 out float vDim;
 out vec4 vHighlight;
+out float vAngle;
 void main() {
   vLocal = (aCorner * 2.0 - 1.0) * iExtent;
   vec2 world = iCenter + vLocal;
@@ -44,6 +46,7 @@ void main() {
   vSpot = iSpot;
   vDim = iDim;
   vHighlight = iHighlight;
+  vAngle = iAngle;
 }`;
 
 export const CHIP_FS = `#version 300 es
@@ -53,6 +56,7 @@ in vec3 vFace;
 in vec3 vSpot;
 in float vDim;
 in vec4 vHighlight;
+in float vAngle;
 out vec4 frag;
 
 const float R = ${R};
@@ -73,22 +77,22 @@ void main() {
 
   float body = 1.0 - smoothstep(R - aa, R + aa, r);
 
-  // 8 edge spots: rim wedges (abs(atan) mirrors the upper half onto the
-  // lower, so four angles cover all eight), continuous with the stripes
-  // painted on the wall below the rim.
-  float angAbs = abs(atan(q.y, q.x));
-  float aaA = max(fwidth(angAbs), 1e-4);
-  float spots = 0.0;
-  for (int k = 0; k < 4; k++) {
-    float a = float(k) * PI_4 + PI_8;
-    float d = abs(angAbs - a);
-    spots = max(spots, 1.0 - smoothstep(W - aaA, W + aaA, d));
-  }
+  // Rotate circle-space coords for angular features (spots, inner ring dash).
+  // The body SDF is radially symmetric so it needs no rotation.
+  float cosA = cos(vAngle), sinA = sin(vAngle);
+  vec2 qr = vec2(q.x * cosA - q.y * sinA, q.x * sinA + q.y * cosA);
+
+  // 8 edge spots: modular check every PI_4, offset by PI_8.
+  // Works correctly for any rotation without the abs() symmetry assumption.
+  float ang = atan(qr.y, qr.x);
+  float aaA = max(fwidth(ang), 1e-4);
+  float patAng = mod(ang - PI_8, PI_4);
+  float spots = 1.0 - smoothstep(W - aaA, W + aaA, min(patAng, PI_4 - patAng));
   spots *= smoothstep(SPOT_INNER - aa, SPOT_INNER + aa, r) * body;
   rgb = mix(rgb, spot, spots);
 
-  // Dashed inner ring: width 1.5, dash 4/3.
-  float arc = abs(angAbs) * R * 0.568;
+  // Dashed inner ring: keyed to rotated angle so dash phase rotates with chip.
+  float arc = ang * R * 0.568;
   float dash = step(mod(arc, 7.0), 4.0);
   float ringA = (1.0 - smoothstep(-aa, aa, abs(r - R * 0.568) - 0.75)) * dash * body;
   rgb = mix(rgb, spot, ringA * 0.8);
@@ -118,12 +122,14 @@ in vec3 iFace;
 in vec3 iSpot;
 in float iDim;
 in float iThick;
+in float iAngle;
 uniform vec2 uResolution;
 out vec2 vLocal;
 out vec3 vFace;
 out vec3 vSpot;
 out float vDim;
 out float vThick;
+out float vAngle;
 void main() {
   vLocal = (aCorner * 2.0 - 1.0) * iExtent;
   vec2 world = iCenter + vLocal;
@@ -133,6 +139,7 @@ void main() {
   vSpot = iSpot;
   vDim = iDim;
   vThick = iThick;
+  vAngle = iAngle;
 }`;
 
 export const WALL_FS = `#version 300 es
@@ -142,6 +149,7 @@ in vec3 vFace;
 in vec3 vSpot;
 in float vDim;
 in float vThick;
+in float vAngle;
 out vec4 frag;
 
 const float R = ${R};
@@ -167,16 +175,12 @@ void main() {
   float aa = max(fwidth(dWall), 1e-4);
   float wall = smoothstep(-aa, aa, dWall);
 
-  // Edge trims: stripes keyed to x-position on the rim (acos(x/R)), so
-  // they project straight down rather than following the face's oblique angle.
-  float angAbs = acos(clamp(q.x / R, -1.0, 1.0));
-  float aaA = max(fwidth(angAbs), 1e-4);
-  float stripe = 0.0;
-  for (int k = 0; k < 4; k++) {
-    float a = float(k) * PI_4 + PI_8;
-    float d = abs(angAbs - a);
-    stripe = max(stripe, 1.0 - smoothstep(W - aaA, W + aaA, d));
-  }
+  // Stripes: keyed to rim x-position (acos(x/R)) offset by chip rotation,
+  // using a modular period test matching the face spots above.
+  float rimAngle = acos(clamp(q.x / R, -1.0, 1.0)) - vAngle;
+  float aaA = max(fwidth(rimAngle), 1e-4);
+  float patRim = mod(rimAngle - PI_8, PI_4);
+  float stripe = 1.0 - smoothstep(W - aaA, W + aaA, min(patRim, PI_4 - patRim));
 
   // Cylinder shading: brighter at front (curve), darker toward base (AO).
   float curve = h / R;

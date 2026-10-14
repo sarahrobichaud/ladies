@@ -38,6 +38,7 @@ export type ChipItem = {
   spot: RGB;
   dim: number;
   highlight: RGBA | null;
+  angle: number; // radians — rotates spots/inner-ring relative to chip body
 };
 
 // Chip wall seen edge-on: the cylinder side between the top face and the
@@ -51,6 +52,7 @@ export type WallItem = {
   spot: RGB;
   dim: number;
   thickness: number;
+  angle: number; // radians — rotates stripes to match chip face rotation
 };
 
 // Rounded-rect panel (hover value badge).

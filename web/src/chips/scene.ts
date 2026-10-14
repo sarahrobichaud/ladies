@@ -67,6 +67,19 @@ function parseColor(color: string): RGB {
   return [0, 1, 1]; // loud fallback: unparseable tokens should be visible
 }
 
+// Stable pseudo-random rotation for a chip at a given stack+depth.
+// Returns a value in [-MAX, +MAX] radians. Top chip always gets 0.
+const MAX_CHIP_ROTATION = 0.18; // ~10 degrees max
+function chipAngle(stackId: number, depth: number): number {
+  // Xorshift-based integer hash — no imports needed.
+  let h = (stackId * 2654435761) ^ (depth * 2246822519);
+  h ^= h >>> 16;
+  h = Math.imul(h, 0x45d9f3b);
+  h ^= h >>> 16;
+  // Map to [-MAX_CHIP_ROTATION, +MAX_CHIP_ROTATION]
+  return ((h & 0xffff) / 0xffff - 0.5) * 2 * MAX_CHIP_ROTATION;
+}
+
 function rgba(c: RGB, a: number): RGBA {
   return [c[0], c[1], c[2], a];
 }
@@ -222,6 +235,9 @@ export function buildScene(o: {
       const palette = colors.tiers[kind % colors.tiers.length];
       const cx = x;
       const cy = y - d * STACK_LIFT - (cut !== null && d >= cut ? liftValue : 0);
+      // Top chip of the whole stack always unrotated; others get a stable random angle.
+      const isTop = d === size - 1;
+      const angle = isTop ? 0 : chipAngle(stack.id, d);
       if (cut !== null && d === cut) {
         // Ghost dashed ellipse at the cut plane, under the lifted upper half.
         items.push(
@@ -238,8 +254,9 @@ export function buildScene(o: {
         spot: palette.spot,
         dim: dimFactor,
         thickness: STACK_LIFT,
+        angle,
       });
-      const isSegmentTop = d === size - 1 || (cut !== null && d === cut - 1);
+      const isSegmentTop = isTop || (cut !== null && d === cut - 1);
       if (isSegmentTop) {
         items.push({
           kind: 'chip',
@@ -248,7 +265,8 @@ export function buildScene(o: {
           face: palette.face,
           spot: palette.spot,
           dim: dimFactor,
-          highlight: topHover && d === size - 1 ? rgba(colors.blue, 1) : null,
+          highlight: topHover && isTop ? rgba(colors.blue, 1) : null,
+          angle,
         });
         pushLabel(
           items,
@@ -266,10 +284,13 @@ export function buildScene(o: {
   if (board.hand && handPos) {
     // Held above the table: a softer, wider shadow offset further down.
     items.push(shadow(handPos.x, handPos.y + STACK_LIFT + 5, 4, 0.18, 7));
+    const handTop = board.hand.chips.length - 1;
     board.hand.chips.forEach((chip, i) => {
       const palette = colors.tiers[chip.kind % colors.tiers.length];
       const cx = handPos.x;
       const cy = handPos.y - i * STACK_LIFT;
+      // Top chip of the hand (last in array = highest visually) stays unrotated.
+      const angle = i === handTop ? 0 : chipAngle(chip.id, i);
       items.push({
         kind: 'wall',
         x: cx,
@@ -278,6 +299,7 @@ export function buildScene(o: {
         spot: palette.spot,
         dim: 1,
         thickness: STACK_LIFT,
+        angle,
       });
       items.push({
         kind: 'chip',
@@ -287,6 +309,7 @@ export function buildScene(o: {
         spot: palette.spot,
         dim: 1,
         highlight: null,
+        angle,
       });
       pushLabel(
         items,
