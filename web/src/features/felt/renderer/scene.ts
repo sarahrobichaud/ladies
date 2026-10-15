@@ -1,138 +1,75 @@
-// Chip scene: pure translation from Board + interaction state to renderer
-// primitives. No GL, no React — the renderer just packs and draws the
-// returned items in order.
-//
-// Chips render in an oblique projection: every chip draws its cylinder
-// wall (with painted edge trims) plus its face; within a stack the chip
-// above covers the faces below, so a stack reads as a top face over one
-// striped wall band per chip. Data stays compressed in the Board — the
-// per-chip items exist only as draw-list entries.
+// The scene builder: pure translation from Board + interaction state to
+// renderer primitives, in painter's order. No GL, no React.
 
-import { CHIP_TIER_VARS } from '../../chips/palette';
 import { CHIP_RADIUS, CHIP_SQUASH, STACK_LIFT } from '../world';
 import type { FontFace } from './text';
-import type { RGB, RGBA, RingItem, SceneItem } from './primitives';
+import type { SceneItem } from './primitives';
 import { chipLabel, formatChips } from '../../../snapshot';
 import { runsValue } from '../../chips/runs';
-import { stackSize, type Board } from '../board';
+import { stackSize, type Board, type Stack } from '../board';
 import { allSlots, slotPosition } from '../lattice';
-import { landingFor, stackTopOffset, type Pick } from '../interaction';
+import { landingFor, stackTopOffset, type Landing, type Pick } from '../interaction';
 import type { Point } from '../geom';
+import { chipAngle, pushLabel, rgba, ring, shade, shadow } from './items';
+import type { SceneColors } from './colors';
 
+export type { SceneColors } from './colors';
+
+// --- scene paint constants (px / alpha) ---------------------------------------
+
+// Lattice rings.
+const LATTICE_RING_INSET = 1; // px inside the chip radius
+const LATTICE_RING_WIDTH = 1;
+const LATTICE_RING_DASH: readonly [number, number] = [3, 5];
+const LATTICE_RING_ALPHA = 0.16;
+
+// Landing ghost ring.
+const GHOST_RING_WIDTH = 2;
+const GHOST_RING_DASH: readonly [number, number] = [4, 4];
+const GHOST_PLACE_ALPHA = 0.6;
+const GHOST_COMBINE_TINT_ALPHA = 0.2;
+
+// Merge halo pulse.
+const HALO_PULSE_PERIOD_MS = 180;
+const HALO_GAP = 6; // px beyond the chip on all sides
+const HALO_PULSE_WOBBLE = 1.5; // px the gap breathes
+const HALO_ALPHA_MIN = 0.45;
+const HALO_ALPHA_RANGE = 0.55;
+
+// Contact shadows.
+const STACK_SHADOW_DROP = 1.5; // px below the stack base
+const STACK_SHADOW_SPREAD = 2.5;
+const STACK_SHADOW_ALPHA = 0.25;
+const STACK_SHADOW_SOFT = 4;
+const HAND_SHADOW_DROP = 5; // px below the hand, held above the felt
+const HAND_SHADOW_SPREAD = 4;
+const HAND_SHADOW_ALPHA = 0.18;
+const HAND_SHADOW_SOFT = 7;
+
+// Stack ink.
+const DIM_FACTOR = 0.5; // non-merge-target stacks while dragging
+const LABEL_BASELINE_OFFSET = 0.5; // px below chip center
+
+// Hover badge.
+const BADGE_MIN_Y = 16; // px from the felt top
+const BADGE_LIFT = 14; // px above the top chip
+const BADGE_CLEARANCE = 10; // extra px above the top chip
+const BADGE_PADDING_X = 8;
+const BADGE_HALF_HEIGHT = 9;
+const BADGE_RADIUS = 9;
+const BADGE_FILL_ALPHA = 0.9;
+
+/** The hand being dragged: which pointer holds it and the grab offset. */
 export type Drag = { pointerId: number; grabX: number; grabY: number };
+
+/** The cut-preview animation: which stack, at what depth, lifted how far. */
 export type Lift = { stackId: number; depth: number; value: number };
 
-export type SceneColors = {
-  tiers: { face: RGB; spot: RGB; text: RGB }[];
-  onFelt: RGB;
-  canvasBg: RGB;
-  line: RGB;
-  ink: RGB;
-  orange: RGB;
-  orangeTint: RGB;
-  blue: RGB;
-  bodyFont: string;
-};
+/** Fonts the scene renders with. */
+export type SceneFonts = { chip: FontFace; badge: FontFace };
 
-// Resolve the theme tokens the scene needs. Re-run on theme changes.
-export function resolveSceneColors(): SceneColors {
-  const style = getComputedStyle(document.documentElement);
-  const v = (name: string) => parseColor(style.getPropertyValue(name));
-  return {
-    tiers: CHIP_TIER_VARS.map(({ face, spot, text }) => ({
-      face: v(face),
-      spot: v(spot),
-      text: v(text),
-    })),
-    onFelt: v('--on-felt'),
-    canvasBg: v('--canvas'),
-    line: v('--line'),
-    ink: v('--ink'),
-    orange: v('--orange'),
-    orangeTint: v('--orange-tint'),
-    blue: v('--blue'),
-    bodyFont: style.getPropertyValue('--body-font').trim(),
-  };
-}
-
-function parseColor(color: string): RGB {
-  const hex = color.trim().match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
-  if (hex) {
-    let h = hex[1];
-    if (h.length === 3) h = [...h].map((c) => c + c).join('');
-    const n = parseInt(h, 16);
-    return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
-  }
-  const rgb = color.match(/^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/);
-  if (rgb) return [Number(rgb[1]) / 255, Number(rgb[2]) / 255, Number(rgb[3]) / 255];
-  return [0, 1, 1]; // loud fallback: unparseable tokens should be visible
-}
-
-// Stable pseudo-random rotation for a chip at a given stack+depth.
-// Returns a value in [-MAX, +MAX] radians. Top chip always gets 0.
-const MAX_CHIP_ROTATION = 0.18; // ~10 degrees max
-function chipAngle(stackId: number, depth: number): number {
-  // Xorshift-based integer hash — no imports needed.
-  let h = (stackId * 2654435761) ^ (depth * 2246822519);
-  h ^= h >>> 16;
-  h = Math.imul(h, 0x45d9f3b);
-  h ^= h >>> 16;
-  // Map to [-MAX_CHIP_ROTATION, +MAX_CHIP_ROTATION]
-  return ((h & 0xffff) / 0xffff - 0.5) * 2 * MAX_CHIP_ROTATION;
-}
-
-function rgba(c: RGB, a: number): RGBA {
-  return [c[0], c[1], c[2], a];
-}
-
-// Darken a color — the dim effect for non-merge-target stacks while dragging.
-function shade(c: RGB, factor: number): RGB {
-  return [c[0] * factor, c[1] * factor, c[2] * factor];
-}
-
-function ring(
-  x: number,
-  y: number,
-  rx: number,
-  ry: number,
-  width: number,
-  dash: readonly [number, number],
-  stroke: RGBA,
-  fill: RGBA | null,
-  soft = 0,
-): RingItem {
-  return { kind: 'ring', x, y, rx, ry, width, dash, stroke, fill, soft };
-}
-
-// Soft contact shadow ellipse under a chip resting on the felt.
-function shadow(x: number, y: number, spread: number, alpha: number, soft: number): RingItem {
-  return {
-    kind: 'ring',
-    x,
-    y,
-    rx: CHIP_RADIUS + spread,
-    ry: (CHIP_RADIUS + spread) * CHIP_SQUASH,
-    width: 0,
-    dash: [0, 0],
-    stroke: [0, 0, 0, 0],
-    fill: [0, 0, 0, alpha],
-    soft,
-  };
-}
-
-function pushLabel(
-  items: SceneItem[],
-  font: FontFace,
-  text: string,
-  cx: number,
-  cy: number,
-  color: RGB,
-) {
-  const w = font.width(text);
-  for (const g of font.glyphs(text, cx - w / 2, cy, color)) items.push(g);
-}
-
-export function buildScene(o: {
+/** Inputs to the scene builder for one frame. */
+export type SceneInput = {
   board: Board;
   handPos: Point | null;
   drag: Drag | null;
@@ -140,27 +77,29 @@ export function buildScene(o: {
   lift: Lift | null;
   colors: SceneColors;
   time: number;
-  fonts: { chip: FontFace; badge: FontFace };
-}): SceneItem[] {
-  const { board, handPos, drag, hover, lift, colors, time, fonts } = o;
+  fonts: SceneFonts;
+};
+
+/** State shared by the per-stack drawing helpers. */
+type StackContext = {
+  drag: Drag | null;
+  hover: Pick | null;
+  lift: Lift | null;
+  colors: SceneColors;
+  fonts: SceneFonts;
+};
+
+/**
+ * Build the frame's draw list: lattice, landing preview, stacks, hand,
+ * and hover badge, in painter's order.
+ * @param input - board state, interaction state, colors, fonts, and time
+ * @returns draw items in painter's order; the renderer packs and draws them as-is
+ */
+export function buildScene(input: SceneInput): SceneItem[] {
+  const { board, handPos, drag, hover, lift, colors, time, fonts } = input;
   const items: SceneItem[] = [];
 
-  // Slot lattice — squashed to match the chip faces.
-  for (const slot of allSlots(board.felt)) {
-    const { x, y } = slotPosition(slot);
-    items.push(
-      ring(
-        x,
-        y,
-        CHIP_RADIUS - 1,
-        (CHIP_RADIUS - 1) * CHIP_SQUASH,
-        1,
-        [3, 5],
-        rgba(colors.onFelt, 0.16),
-        null,
-      ),
-    );
-  }
+  pushLattice(items, board, colors);
 
   const landing = board.hand && handPos ? landingFor(board, handPos) : null;
   const mergeTarget =
@@ -168,199 +107,267 @@ export function buildScene(o: {
       ? (board.stacks.find((s) => s.id === landing.stackId) ?? null)
       : null;
 
-  // Landing ghost: where the hand's bottom chip will sit.
-  if (landing && landing.type !== 'none') {
-    const combine = landing.type === 'combine';
-    items.push(
-      ring(
-        landing.ring.x,
-        landing.ring.y,
-        CHIP_RADIUS,
-        CHIP_RADIUS * CHIP_SQUASH,
-        2,
-        [4, 4],
-        combine ? rgba(colors.orange, 1) : rgba(colors.onFelt, 0.6),
-        combine ? rgba(colors.orangeTint, 0.2) : null,
-      ),
-    );
+  pushLandingGhost(items, landing, colors);
+  if (mergeTarget) pushMergeHalo(items, mergeTarget, colors, time);
+
+  const stacks = stacksBackToFront(board);
+  pushStackShadows(items, stacks);
+  for (const stack of stacks) {
+    pushStack(items, board, stack, mergeTarget, { drag, hover, lift, colors, fonts });
   }
 
-  // Merge halo: pulses around the stack the hand will combine with.
-  if (mergeTarget) {
-    const { x, y } = slotPosition(mergeTarget.slot);
-    const n = stackSize(mergeTarget);
-    const pulse = 0.5 + 0.5 * Math.sin(time / 180);
+  pushHand(items, board, handPos, colors, fonts);
+  pushHoverBadge(items, board, hover, drag, colors, fonts);
+
+  return items;
+}
+
+/** Draw one dashed ring per lattice slot, squashed to match chip faces. */
+function pushLattice(items: SceneItem[], board: Board, colors: SceneColors) {
+  for (const slot of allSlots(board.felt)) {
+    const { x, y } = slotPosition(slot);
     items.push(
       ring(
         x,
-        y - ((n - 1) * STACK_LIFT) / 2,
-        CHIP_RADIUS + 6 + pulse * 1.5,
-        CHIP_RADIUS * CHIP_SQUASH + ((n - 1) * STACK_LIFT) / 2 + 6 + pulse * 1.5,
-        2,
-        [0, 0],
-        rgba(colors.orange, 0.45 + 0.55 * pulse),
+        y,
+        CHIP_RADIUS - LATTICE_RING_INSET,
+        (CHIP_RADIUS - LATTICE_RING_INSET) * CHIP_SQUASH,
+        LATTICE_RING_WIDTH,
+        LATTICE_RING_DASH,
+        rgba(colors.onFelt, LATTICE_RING_ALPHA),
         null,
       ),
     );
   }
+}
 
-  // Stacks, y-sorted: a stack's bottom chip y is its z depth. Stacks lower
-  // on the felt occlude the stacks behind them, so a tall stack overlaps
-  // the row above correctly instead of insertion order deciding.
-  const stacks = [...board.stacks].sort(
+/** Draw the landing ghost where the hand's bottom chip would sit. */
+function pushLandingGhost(items: SceneItem[], landing: Landing | null, colors: SceneColors) {
+  if (!landing || landing.type === 'none') return;
+
+  const isCombine = landing.type === 'combine';
+  items.push(
+    ring(
+      landing.ring.x,
+      landing.ring.y,
+      CHIP_RADIUS,
+      CHIP_RADIUS * CHIP_SQUASH,
+      GHOST_RING_WIDTH,
+      GHOST_RING_DASH,
+      isCombine ? rgba(colors.orange, 1) : rgba(colors.onFelt, GHOST_PLACE_ALPHA),
+      isCombine ? rgba(colors.orangeTint, GHOST_COMBINE_TINT_ALPHA) : null,
+    ),
+  );
+}
+
+/** Draw the pulsing halo around the stack the hand will combine with. */
+function pushMergeHalo(
+  items: SceneItem[],
+  target: Stack,
+  colors: SceneColors,
+  time: number,
+) {
+  const { x, y } = slotPosition(target.slot);
+  const height = (stackSize(target) - 1) * STACK_LIFT;
+  const pulse = 0.5 + 0.5 * Math.sin(time / HALO_PULSE_PERIOD_MS);
+  const gap = HALO_GAP + pulse * HALO_PULSE_WOBBLE;
+
+  items.push(
+    ring(
+      x,
+      y - height / 2,
+      CHIP_RADIUS + gap,
+      CHIP_RADIUS * CHIP_SQUASH + height / 2 + gap,
+      GHOST_RING_WIDTH,
+      [0, 0],
+      rgba(colors.orange, HALO_ALPHA_MIN + HALO_ALPHA_RANGE * pulse),
+      null,
+    ),
+  );
+}
+
+/** Order stacks bottom-of-screen first, so lower stacks occlude higher ones. */
+function stacksBackToFront(board: Board): Stack[] {
+  return [...board.stacks].sort(
     (a, b) => slotPosition(a.slot).y - slotPosition(b.slot).y,
   );
-  // Contact shadows, hoisted into one consecutive run ahead of the stacks.
-  // A shadow never reaches neighboring chip ink (lattice spacing keeps them
-  // clear), so drawing them all first is visually identical to interleaving
-  // and saves one kind-switch — one draw call — per stack.
+}
+
+/** Draw one contact shadow per stack, hoisted ahead of all stack ink. */
+function pushStackShadows(items: SceneItem[], stacks: Stack[]) {
   for (const stack of stacks) {
     const { x, y } = slotPosition(stack.slot);
-    items.push(shadow(x, y + STACK_LIFT + 1.5, 2.5, 0.25, 4));
+    items.push(shadow(x, y + STACK_LIFT + STACK_SHADOW_DROP, STACK_SHADOW_SPREAD, STACK_SHADOW_ALPHA, STACK_SHADOW_SOFT));
   }
+}
 
-  for (const stack of stacks) {
-    const isMergeTarget = mergeTarget?.id === stack.id;
-    const dimFactor = drag !== null && !isMergeTarget ? 0.5 : 1;
-    const { x, y } = slotPosition(stack.slot);
-    const size = stackSize(stack);
-    const kindAt: number[] = [];
-    for (const run of stack.runs) {
-      for (let i = 0; i < run.count; i++) kindAt.push(run.kind);
-    }
+/** Draw one stack: walls in one run, then the exposed faces with labels. */
+function pushStack(
+  items: SceneItem[],
+  board: Board,
+  stack: Stack,
+  mergeTarget: Stack | null,
+  ctx: StackContext,
+) {
+  const { drag, hover, lift, colors, fonts } = ctx;
+  const isMergeTarget = mergeTarget?.id === stack.id;
+  const dimFactor = drag !== null && !isMergeTarget ? DIM_FACTOR : 1;
+  const { x, y } = slotPosition(stack.slot);
+  const size = stackSize(stack);
+  const kindAt = kindsAt(stack);
 
-    const hovered = hover?.stackId === stack.id ? hover : null;
-    const liftState = lift?.stackId === stack.id ? lift : null;
-    // The cut structure rides the lift state so the preview decays smoothly
-    // after the pointer leaves.
-    const cut = liftState?.depth ?? null;
-    const liftValue = liftState?.value ?? 0;
-    const topHover = hovered?.isTop === true;
+  const hovered = hover?.stackId === stack.id ? hover : null;
+  const liftState = lift?.stackId === stack.id ? lift : null;
+  const cut = liftState?.depth ?? null;
+  const liftValue = liftState?.value ?? 0;
+  const topHover = hovered?.isTop === true;
 
-    // Per-depth geometry helpers. Walls go in one run and exposed faces in
-    // another: the renderer batches consecutive same-kind items, so this is
-    // ~3 draw calls per stack instead of ~3 per chip. The reordering is
-    // order-safe — walls of different depths overlap each other and the one
-    // exposed face below them, and both keep their relative order here.
-    const cyAt = (d: number) =>
-      y - d * STACK_LIFT - (cut !== null && d >= cut ? liftValue : 0);
-    const angleAt = (d: number) => (d === size - 1 ? 0 : chipAngle(stack.id, d));
-    const pushWall = (d: number) => {
-      const palette = colors.tiers[kindAt[d] % colors.tiers.length];
-      items.push({
-        kind: 'wall',
-        x,
-        y: cyAt(d),
-        face: palette.face,
-        spot: palette.spot,
-        dim: dimFactor,
-        thickness: STACK_LIFT,
-        angle: angleAt(d),
-      });
-    };
-    // Only exposed segment tops draw a face — the chip above covers the
-    // faces below, so the rest would be hidden.
-    const pushFace = (d: number) => {
-      const palette = colors.tiers[kindAt[d] % colors.tiers.length];
-      items.push({
-        kind: 'chip',
-        x,
-        y: cyAt(d),
-        face: palette.face,
-        spot: palette.spot,
-        dim: dimFactor,
-        highlight: topHover && d === size - 1 ? rgba(colors.blue, 1) : null,
-        angle: angleAt(d),
-      });
-      pushLabel(
-        items,
-        fonts.chip,
-        chipLabel(board.catalog[kindAt[d]].value),
-        x,
-        cyAt(d) + 0.5,
-        shade(palette.text, dimFactor),
-      );
-    };
+  const cyAt = (depth: number) =>
+    y - depth * STACK_LIFT - (cut !== null && depth >= cut ? liftValue : 0);
+  const angleAt = (depth: number) => (depth === size - 1 ? 0 : chipAngle(stack.id, depth));
 
-    if (cut === null) {
-      for (let d = 0; d < size; d++) pushWall(d);
-      pushFace(size - 1);
-    } else {
-      // Cut stack: lower half, then the ghost dashed ellipse at the cut
-      // plane, then the lifted upper half — same relative order as before.
-      for (let d = 0; d < cut; d++) pushWall(d);
-      if (cut > 0) pushFace(cut - 1);
-      items.push(
-        ring(x, y - cut * STACK_LIFT, CHIP_RADIUS, CHIP_RADIUS * CHIP_SQUASH, 2, [4, 4], rgba(colors.orange, 1), null),
-      );
-      for (let d = cut; d < size; d++) pushWall(d);
-      pushFace(size - 1);
-    }
-  }
-
-  // Hand — materialized individual chips, each a full wall + face.
-  if (board.hand && handPos) {
-    // Held above the table: a softer, wider shadow offset further down.
-    items.push(shadow(handPos.x, handPos.y + STACK_LIFT + 5, 4, 0.18, 7));
-    const handTop = board.hand.chips.length - 1;
-    board.hand.chips.forEach((chip, i) => {
-      const palette = colors.tiers[chip.kind % colors.tiers.length];
-      const cx = handPos.x;
-      const cy = handPos.y - i * STACK_LIFT;
-      // Top chip of the hand (last in array = highest visually) stays unrotated.
-      const angle = i === handTop ? 0 : chipAngle(chip.id, i);
-      items.push({
-        kind: 'wall',
-        x: cx,
-        y: cy,
-        face: palette.face,
-        spot: palette.spot,
-        dim: 1,
-        thickness: STACK_LIFT,
-        angle,
-      });
-      items.push({
-        kind: 'chip',
-        x: cx,
-        y: cy,
-        face: palette.face,
-        spot: palette.spot,
-        dim: 1,
-        highlight: null,
-        angle,
-      });
-      pushLabel(
-        items,
-        fonts.chip,
-        chipLabel(board.catalog[chip.kind].value),
-        cx,
-        cy + 0.5,
-        palette.text,
-      );
+  const pushWall = (depth: number) => {
+    const palette = colors.tiers[kindAt[depth] % colors.tiers.length];
+    items.push({
+      kind: 'wall',
+      x,
+      y: cyAt(depth),
+      face: palette.face,
+      spot: palette.spot,
+      dim: dimFactor,
+      thickness: STACK_LIFT,
+      angle: angleAt(depth),
     });
-  }
+  };
 
-  // Hovered stack value badge.
-  if (hover && !drag) {
-    const stack = board.stacks.find((s) => s.id === hover.stackId);
-    if (stack) {
-      const { x, y } = slotPosition(stack.slot);
-      const by = Math.max(16, y - stackTopOffset(stack) - 14 - 10);
-      const text = formatChips(runsValue(stack.runs, board.catalog));
-      const tw = fonts.badge.width(text);
-      items.push({
-        kind: 'panel',
-        x,
-        y: by,
-        hw: tw / 2 + 8,
-        hh: 9,
-        radius: 9,
-        fill: rgba(colors.canvasBg, 0.9),
-        stroke: rgba(colors.line, 1),
-      });
-      pushLabel(items, fonts.badge, text, x, by, colors.ink);
-    }
-  }
+  const pushFace = (depth: number) => {
+    const palette = colors.tiers[kindAt[depth] % colors.tiers.length];
+    items.push({
+      kind: 'chip',
+      x,
+      y: cyAt(depth),
+      face: palette.face,
+      spot: palette.spot,
+      dim: dimFactor,
+      highlight: topHover && depth === size - 1 ? rgba(colors.blue, 1) : null,
+      angle: angleAt(depth),
+    });
+    pushLabel(
+      items,
+      fonts.chip,
+      chipLabel(board.catalog[kindAt[depth]].value),
+      x,
+      cyAt(depth) + LABEL_BASELINE_OFFSET,
+      shade(palette.text, dimFactor),
+    );
+  };
 
-  return items;
+  if (cut === null) {
+    for (let depth = 0; depth < size; depth++) pushWall(depth);
+    pushFace(size - 1);
+  } else {
+    // Cut stack: lower half, ghost ellipse at the cut plane, lifted upper half.
+    for (let depth = 0; depth < cut; depth++) pushWall(depth);
+    if (cut > 0) pushFace(cut - 1);
+    items.push(
+      ring(x, y - cut * STACK_LIFT, CHIP_RADIUS, CHIP_RADIUS * CHIP_SQUASH, GHOST_RING_WIDTH, GHOST_RING_DASH, rgba(colors.orange, 1), null),
+    );
+    for (let depth = cut; depth < size; depth++) pushWall(depth);
+    pushFace(size - 1);
+  }
+}
+
+/** Expand a stack's runs into one kind id per chip depth. */
+function kindsAt(stack: Stack): number[] {
+  const kindAt: number[] = [];
+  for (const run of stack.runs) {
+    for (let i = 0; i < run.count; i++) kindAt.push(run.kind);
+  }
+  return kindAt;
+}
+
+/** Draw the held hand: a soft shadow plus a wall, face, and label per chip. */
+function pushHand(
+  items: SceneItem[],
+  board: Board,
+  handPos: Point | null,
+  colors: SceneColors,
+  fonts: SceneFonts,
+) {
+  if (!board.hand || !handPos) return;
+
+  // Held above the table: a softer, wider shadow offset further down.
+  items.push(shadow(handPos.x, handPos.y + STACK_LIFT + HAND_SHADOW_DROP, HAND_SHADOW_SPREAD, HAND_SHADOW_ALPHA, HAND_SHADOW_SOFT));
+
+  const chips = board.hand.chips;
+  const topIndex = chips.length - 1;
+
+  for (let i = 0; i < chips.length; i++) {
+    const chip = chips[i];
+    const palette = colors.tiers[chip.kind % colors.tiers.length];
+    const cy = handPos.y - i * STACK_LIFT;
+    // Top chip of the hand (last in array = highest visually) stays unrotated.
+    const angle = i === topIndex ? 0 : chipAngle(chip.id, i);
+
+    items.push({
+      kind: 'wall',
+      x: handPos.x,
+      y: cy,
+      face: palette.face,
+      spot: palette.spot,
+      dim: 1,
+      thickness: STACK_LIFT,
+      angle,
+    });
+    items.push({
+      kind: 'chip',
+      x: handPos.x,
+      y: cy,
+      face: palette.face,
+      spot: palette.spot,
+      dim: 1,
+      highlight: null,
+      angle,
+    });
+    pushLabel(
+      items,
+      fonts.chip,
+      chipLabel(board.catalog[chip.kind].value),
+      handPos.x,
+      cy + LABEL_BASELINE_OFFSET,
+      palette.text,
+    );
+  }
+}
+
+/** Draw the hovered stack's value badge above its top chip. */
+function pushHoverBadge(
+  items: SceneItem[],
+  board: Board,
+  hover: Pick | null,
+  drag: Drag | null,
+  colors: SceneColors,
+  fonts: SceneFonts,
+) {
+  if (!hover || drag) return;
+
+  const stack = board.stacks.find((s) => s.id === hover.stackId);
+  if (!stack) return;
+
+  const { x, y } = slotPosition(stack.slot);
+  const badgeY = Math.max(BADGE_MIN_Y, y - stackTopOffset(stack) - BADGE_LIFT - BADGE_CLEARANCE);
+  const text = formatChips(runsValue(stack.runs, board.catalog));
+  const textWidth = fonts.badge.width(text);
+
+  items.push({
+    kind: 'panel',
+    x,
+    y: badgeY,
+    hw: textWidth / 2 + BADGE_PADDING_X,
+    hh: BADGE_HALF_HEIGHT,
+    radius: BADGE_RADIUS,
+    fill: rgba(colors.canvasBg, BADGE_FILL_ALPHA),
+    stroke: rgba(colors.line, 1),
+  });
+  pushLabel(items, fonts.badge, text, x, badgeY, colors.ink);
 }

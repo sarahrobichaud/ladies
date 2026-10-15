@@ -21,7 +21,8 @@ import type { Catalog, Run } from '../chips/types';
 import type { Point } from './geom';
 import { formatChips } from '../../snapshot';
 import { createPrimitiveRenderer, type PrimitiveRenderer } from './renderer/renderer';
-import { buildScene, resolveSceneColors, type Drag, type Lift } from './renderer/scene';
+import { buildScene, type Drag, type Lift } from './renderer/scene';
+import { resolveSceneColors } from './renderer/colors';
 
 const SPAWN_THRESHOLD = 6; // pointer travel before a tray press becomes a drag
 

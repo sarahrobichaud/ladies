@@ -1,13 +1,9 @@
-// Primitive vocabulary of the renderer. A frame is an ordered list of
-// these items; the renderer batches consecutive same-kind runs into
-// instanced draws, preserving painter's order exactly.
+// Primitive vocabulary of the renderer, drawn in painter's order.
 
 export type RGB = readonly [number, number, number];
 export type RGBA = readonly [number, number, number, number];
 
-// Dashed/solid ellipse ring (slot lattice, landing ghost, cut plane, merge
-// halo, soft contact shadows). dash [0, 0] = solid; fill null = outline
-// only; soft > 0 fades the fill edge over that many px (shadows).
+/** Dashed or solid ellipse ring; dash [0, 0] means solid, fill null means outline-only. */
 export type RingItem = {
   kind: 'ring';
   x: number;
@@ -21,9 +17,7 @@ export type RingItem = {
   soft: number;
 };
 
-// Chip face, top-down but vertically squashed: SDF disc with edge spots,
-// dashed inner ring, rim, bottom arc, optional highlight ring. dim
-// multiplies all chip colors.
+/** Chip face: a squashed SDF disc with edge spots, inner ring, rim, and optional highlight. */
 export type ChipItem = {
   kind: 'chip';
   x: number;
@@ -35,9 +29,7 @@ export type ChipItem = {
   angle: number; // radians — rotates spots/inner-ring relative to chip body
 };
 
-// Chip wall seen edge-on: the cylinder side between the top face and the
-// base, with painted edge trims (stripes aligned with the face spots),
-// cylinder shading, and a groove line at the base.
+/** Chip wall: the cylinder side under a face, with stripes, shading, and a base groove. */
 export type WallItem = {
   kind: 'wall';
   x: number;
@@ -49,7 +41,7 @@ export type WallItem = {
   angle: number; // radians — rotates stripes to match chip face rotation
 };
 
-// Rounded-rect panel (hover value badge).
+/** Rounded-rect panel, used for the hover value badge. */
 export type PanelItem = {
   kind: 'panel';
   x: number;
@@ -61,7 +53,7 @@ export type PanelItem = {
   stroke: RGBA;
 };
 
-// One glyph quad sampled from the text atlas.
+/** One glyph quad sampled from the text atlas. */
 export type GlyphItem = {
   kind: 'glyph';
   x: number;
