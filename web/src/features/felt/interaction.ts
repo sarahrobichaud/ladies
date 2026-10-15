@@ -1,17 +1,16 @@
-import { CHIP_SQUASH } from '../engine/primitives';
-import { allSlots, CHIP_RADIUS, slotPosition } from './lattice';
-import type { Board, Point, Slot, Stack, StackId } from './types';
+import { CHIP_RADIUS, CHIP_SQUASH, STACK_LIFT } from './world';
+import { allSlots, slotPosition, type Slot } from './lattice';
+import { stackSize, type Board, type Stack, type StackId } from './board';
+import type { Point } from './geom';
+
+// Felt interaction semantics: what a pointer position means against the
+// resting board. Pure geometry over the chips Board + the felt world —
+// no DOM, no React, no GL. The feel knobs live here too.
 
 // Interaction constants — the feel knobs.
-export const STACK_CAPACITY = 10; // wheel-sizing cap for a uniform hand
-export const STACK_LIFT = 6; // vertical px between chips in a stack
 export const PREVIEW_LIFT = 10; // hover preview: how far the upper half rises
 export const COMBINE_BAND = 16; // vertical combine band above a stack's top chip
 export const COMBINE_HALF_WIDTH = 20; // horizontal tolerance for the band
-
-export function stackSize(stack: Stack): number {
-  return stack.runs.reduce((n, r) => n + r.count, 0);
-}
 
 // The stack's top chip offset above its base, in px.
 export function stackTopOffset(stack: Stack): number {
@@ -124,13 +123,4 @@ export function nearestSlotAny(board: Board, x: number, y: number): Slot | null 
     }
   }
   return best;
-}
-
-// Wheel-sizing preconditions: a uniform hand, within the stack capacity.
-export function canSize(board: Board, delta: 1 | -1): boolean {
-  const hand = board.hand;
-  if (!hand || hand.chips.length === 0) return false;
-  const kind = hand.chips[0].kind;
-  if (!hand.chips.every((c) => c.kind === kind)) return false;
-  return delta === 1 ? hand.chips.length < STACK_CAPACITY : hand.chips.length > 1;
 }

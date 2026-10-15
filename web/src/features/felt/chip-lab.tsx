@@ -1,40 +1,27 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { Link } from 'react-router';
-import { Chip } from './chip';
-import { CATALOG } from './chips/catalog';
+import { Chip } from '../chips/chip';
+import { CATALOG } from '../chips/catalog';
 import { chipLabel } from '../../snapshot';
-import { allSlots, slotPosition } from './chips/lattice';
-import { parseRuns } from './chips/notation';
+import { allSlots, slotPosition, type Slot } from './lattice';
+import { parseRuns } from '../chips/notation';
 import {
   PREVIEW_LIFT,
-  STACK_CAPACITY,
-  STACK_LIFT,
   landingFor,
   nearestFreeSlot,
   nearestSlotAny,
   pickAt,
   type Pick,
-} from './chips/rules';
-import {
-  clearBoard,
-  coalesce,
-  commitHand,
-  createBoard,
-  discardHand,
-  pickFrom,
-  pickStack,
-  pickTop,
-  setFelt,
-  sizeHand,
-  spawnStack,
-  takeFromTray,
-  totalValue,
-} from './chips/model';
-import type { Board, Catalog, Point, Run, Slot } from './chips/types';
+} from './interaction';
+import { STACK_LIFT } from './world';
+import { STACK_CAPACITY, clearBoard, commitHand, createBoard, discardHand, pickFrom, pickStack, pickTop, setFelt, sizeHand, spawnStack, takeFromTray, totalValue, type Board } from './board';
+import { coalesce } from '../chips/runs';
+import type { Catalog, Run } from '../chips/types';
+import type { Point } from './geom';
 import { formatChips } from '../../snapshot';
-import { createPrimitiveRenderer, type PrimitiveRenderer } from './engine/renderer';
-import { buildScene, resolveSceneColors, type Drag, type Lift } from './chips/scene';
+import { createPrimitiveRenderer, type PrimitiveRenderer } from './renderer/renderer';
+import { buildScene, resolveSceneColors, type Drag, type Lift } from './renderer/scene';
 
 const SPAWN_THRESHOLD = 6; // pointer travel before a tray press becomes a drag
 
@@ -354,7 +341,7 @@ export function ChipLab() {
       <div className="flex items-center gap-4 rounded-xl border border-line bg-surface p-3 shadow-lg">
         {board.catalog.map((kind, kindId) => (
           <div key={kindId} className="flex flex-col items-center gap-1">
-            <Chip value={kind.value} tier={kind.tier} size={44} />
+            <Chip value={kind.value} tier={kind.tier} />
             <span className="text-[10px] text-muted">{chipLabel(kind.value)}</span>
           </div>
         ))}
@@ -379,7 +366,7 @@ export function ChipLab() {
               onPointerUp={onPointerUp}
               onPointerCancel={cancelGesture}
             >
-              <Chip value={kind.value} tier={kind.tier} size={44} />
+              <Chip value={kind.value} tier={kind.tier} />
             </div>
           ))}
         </div>

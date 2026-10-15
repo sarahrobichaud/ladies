@@ -1,12 +1,13 @@
-import { CHIP_RADIUS } from '../engine/primitives';
-import type { Point, Size, Slot } from './types';
+import { CHIP_RADIUS, SLOT_ROW_HEIGHT, SLOT_SPACING } from './world';
+import type { Point, Size } from './geom';
 
 // Staggered circle-slot lattice: every other row offset half a spacing so
-// slots align along diagonals. Row height is spacing·√3/2, making every
-// slot equidistant from its six neighbours — a circle packing.
-export const SLOT_SPACING = 52;
-export const SLOT_ROW_HEIGHT = 45;
-export { CHIP_RADIUS }; // matches the 44px chips; single-sourced in the engine
+// slots align along diagonals. Spacing and row height come from world.ts
+// (row height = spacing·√3/2, making every slot equidistant from its six
+// neighbours — a circle packing).
+
+// Address of one slot in the lattice; pixel conversion lives here.
+export type Slot = { col: number; row: number };
 
 export function slotPosition(slot: Slot): Point {
   return {

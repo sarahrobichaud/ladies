@@ -1,9 +1,17 @@
-// The mini engine's render front: takes an ordered scene (painter's order)
+// The render front: takes an ordered scene (painter's order)
 // and flushes consecutive same-kind runs as instanced draws. One program +
 // batch per primitive kind; all math is CSS px, the viewport is device px.
 
 import { Batch, createGL, createProgram, type InstanceAttr } from './gl';
-import { CHIP_RADIUS, CHIP_SQUASH, type ChipItem, type GlyphItem, type PanelItem, type RingItem, type SceneItem, type WallItem } from './primitives';
+import {
+  CHIP_RADIUS,
+  CHIP_SQUASH,
+  SPOT_HALF_WIDTH,
+  SPOT_INNER_RADIUS,
+  INNER_RING_RADIUS,
+  INNER_DASH,
+} from '../world';
+import type { ChipItem, GlyphItem, PanelItem, RingItem, SceneItem, WallItem } from './primitives';
 import {
   CHIP_FS,
   CHIP_VS,
@@ -75,6 +83,28 @@ type Pass = {
   uResolution: WebGLUniformLocation | null;
 };
 
+// World-value injection: the shader constants that derive from the world
+// model are uniforms, set once at program init from world.ts. Programs
+// that don't declare a uniform simply get null locations, which are
+// skipped — so this is safe to run on every program.
+function initWorldUniforms(gl: WebGL2RenderingContext, program: WebGLProgram) {
+  gl.useProgram(program);
+  const scalar = (name: string, value: number) => {
+    const loc = gl.getUniformLocation(program, name);
+    if (loc) gl.uniform1f(loc, value);
+  };
+  const pair = (name: string, x: number, y: number) => {
+    const loc = gl.getUniformLocation(program, name);
+    if (loc) gl.uniform2f(loc, x, y);
+  };
+  scalar('uChipRadius', CHIP_RADIUS);
+  scalar('uSquash', CHIP_SQUASH);
+  scalar('uSpotHalfWidth', SPOT_HALF_WIDTH);
+  scalar('uSpotInnerRadius', SPOT_INNER_RADIUS);
+  scalar('uInnerRingRadius', INNER_RING_RADIUS);
+  pair('uInnerDash', INNER_DASH[0], INNER_DASH[1]);
+}
+
 class Renderer {
   private gl: WebGL2RenderingContext;
   private canvas: HTMLCanvasElement;
@@ -95,6 +125,7 @@ class Renderer {
 
     const make = (vs: string, fs: string, attrs: InstanceAttr[]): Pass => {
       const program = createProgram(gl, vs, fs);
+      initWorldUniforms(gl, program);
       return {
         program,
         batch: new Batch(gl, program, attrs),

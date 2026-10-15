@@ -1,72 +1,45 @@
-import { STACK_CAPACITY } from './rules';
-import type { Board, Catalog, Chip, ChipId, KindId, Run, Size, Slot, Stack, StackId } from './types';
+import {
+  coalesce,
+  materialize,
+  runsFromChips,
+  runsSize,
+  runsValue,
+  splitRuns,
+} from '../chips/runs';
+import type { Catalog, Chip, KindId, Run } from '../chips/types';
+import type { Slot } from './lattice';
+import type { Size } from './geom';
 
-// Pure board ops: every function is a total Board → Board transition that
-// keeps the invariants — one hand, one stack per slot, canonical runs,
-// non-empty stacks. Rejected moves return the board unchanged (callers
-// can compare references).
+// The felt board: stacks resting on lattice slots, plus the hand of chips
+// being dragged. Pure data transitions — every op is a total
+// Board → Board function that keeps the invariants (one hand, one stack
+// per slot, canonical runs, non-empty stacks). Rejected moves return the
+// board unchanged (callers can compare references).
 
-// --- run utilities ----------------------------------------------------------
+// Wheel-sizing cap for a uniform hand. Part of the sizeHand precondition.
+export const STACK_CAPACITY = 10;
 
-// Canonical form: no zero counts, no adjacent runs of the same kind.
-export function coalesce(runs: Run[]): Run[] {
-  const out: Run[] = [];
-  for (const run of runs) {
-    if (run.count <= 0) continue;
-    const last = out[out.length - 1];
-    if (last && last.kind === run.kind) last.count += run.count;
-    else out.push({ ...run });
-  }
-  return out;
-}
+// Unique identifier for a stack resting on the board.
+export type StackId = number;
 
-export function runsSize(runs: Run[]): number {
-  return runs.reduce((n, r) => n + r.count, 0);
-}
+// A compressed pile of chips resting at one slot, ordered bottom → top.
+export type Stack = { id: StackId; slot: Slot; runs: Run[] };
 
-export function runsValue(runs: Run[], catalog: Catalog): bigint {
-  return runs.reduce((sum, r) => sum + catalog[r.kind].value * BigInt(r.count), 0n);
-}
+// The chips currently being dragged, plus the stack they came from (null for tray spawns).
+export type Hand = { chips: Chip[]; origin: StackId | null };
 
-// Split at a depth: the first `depth` chips stay, the rest go up. May cut
-// a run in half.
-export function splitRuns(runs: Run[], depth: number): [Run[], Run[]] {
-  const lower: Run[] = [];
-  const upper: Run[] = [];
-  let seen = 0;
-  for (const run of runs) {
-    const start = seen;
-    seen += run.count;
-    if (start >= depth) upper.push({ ...run });
-    else if (seen <= depth) lower.push({ ...run });
-    else {
-      const take = depth - start;
-      if (take > 0) lower.push({ kind: run.kind, count: take });
-      if (run.count - take > 0) upper.push({ kind: run.kind, count: run.count - take });
-    }
-  }
-  return [coalesce(lower), coalesce(upper)];
-}
+// The whole felt state: felt size, resting stacks, and the optional hand.
+export type Board = {
+  catalog: Catalog;
+  felt: Size;
+  stacks: Stack[];
+  hand: Hand | null;
+  nextChipId: number;
+  nextStackId: number;
+};
 
-function runsFromChips(chips: Chip[]): Run[] {
-  const runs: Run[] = [];
-  for (const chip of chips) {
-    const last = runs[runs.length - 1];
-    if (last && last.kind === chip.kind) last.count += 1;
-    else runs.push({ kind: chip.kind, count: 1 });
-  }
-  return runs;
-}
-
-// Materialize runs into individual chips — the compression seam between
-// Stack and Hand. Ids are minted here and discarded at commit.
-function materialize(runs: Run[], firstId: ChipId): { chips: Chip[]; nextId: ChipId } {
-  const chips: Chip[] = [];
-  let id = firstId;
-  for (const run of runs) {
-    for (let i = 0; i < run.count; i++) chips.push({ id: id++, kind: run.kind });
-  }
-  return { chips, nextId: id };
+export function stackSize(stack: Stack): number {
+  return runsSize(stack.runs);
 }
 
 // --- board ops ----------------------------------------------------------------

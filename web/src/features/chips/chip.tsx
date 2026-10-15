@@ -1,11 +1,15 @@
 import type { CSSProperties } from 'react';
 import { chipLabel } from '../../snapshot';
-import { CHIP_TIERS } from './chip-palette';
+import { CHIP_TIERS } from './palette';
+
+// Canonical chip size in px — the felt world adopts this as its scale
+// knob (felt/world.ts derives CHIP_RADIUS from it).
+export const CHIP_SIZE = 44;
 
 export function Chip({
   value,
   tier,
-  size = 44,
+  size = CHIP_SIZE,
   className,
   style,
 }: {

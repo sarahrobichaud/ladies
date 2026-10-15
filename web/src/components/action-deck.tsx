@@ -4,7 +4,7 @@ import { formatChips } from '../snapshot';
 import type { HandSnapshot, PlayerSnapshot } from '../snapshot';
 import type { ActionKind } from './action-menu';
 import { PlayingCard } from './player-card';
-import { Chip } from '../features/felt/chip';
+import { Chip } from '../features/chips/chip';
 
 // Gesture thresholds in px.
 const FOLD_DISTANCE = 90;

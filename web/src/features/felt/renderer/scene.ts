@@ -1,4 +1,4 @@
-// Chip scene: pure translation from Board + interaction state to engine
+// Chip scene: pure translation from Board + interaction state to renderer
 // primitives. No GL, no React — the renderer just packs and draws the
 // returned items in order.
 //
@@ -8,15 +8,16 @@
 // striped wall band per chip. Data stays compressed in the Board — the
 // per-chip items exist only as draw-list entries.
 
-import { CHIP_TIER_VARS } from '../chip-palette';
-import { CHIP_SQUASH } from '../engine/primitives';
-import type { FontFace } from '../engine/text';
-import type { RGB, RGBA, RingItem, SceneItem } from '../engine/primitives';
+import { CHIP_TIER_VARS } from '../../chips/palette';
+import { CHIP_RADIUS, CHIP_SQUASH, STACK_LIFT } from '../world';
+import type { FontFace } from './text';
+import type { RGB, RGBA, RingItem, SceneItem } from './primitives';
 import { chipLabel, formatChips } from '../../../snapshot';
-import { runsValue } from './model';
-import { allSlots, CHIP_RADIUS, slotPosition } from './lattice';
-import { STACK_LIFT, landingFor, stackSize, stackTopOffset, type Pick } from './rules';
-import type { Board, Point } from './types';
+import { runsValue } from '../../chips/runs';
+import { stackSize, type Board } from '../board';
+import { allSlots, slotPosition } from '../lattice';
+import { landingFor, stackTopOffset, type Pick } from '../interaction';
+import type { Point } from '../geom';
 
 export type Drag = { pointerId: number; grabX: number; grabY: number };
 export type Lift = { stackId: number; depth: number; value: number };

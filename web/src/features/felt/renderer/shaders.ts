@@ -10,13 +10,12 @@
 // in chip space. The face's edge spots and the wall's stripes share the
 // same angular paint (W / SPOT_INNER), so the trims read as one continuous
 // pattern wrapping over the rim.
-
-import { CHIP_RADIUS, CHIP_SQUASH } from './primitives';
-
-const R = `${CHIP_RADIUS}.0`;
-const SQUASH = `${CHIP_SQUASH}`;
-const W = '0.08'; // rad — half-width of edge spots and wall stripes
-const SPOT_INNER = '0.72'; // × R — inner radius of the face spots
+//
+// World-coupled constants (chip radius, squash, spot/inner-ring paint) are
+// NOT baked — they arrive as uniforms, injected once at program init from
+// world.ts (see initWorldUniforms in renderer.ts). Screen-domain px
+// (hairline widths, highlight offset, the inner-ring dash period) stay
+// baked: they tune crispness, not world scale.
 
 // --- chip face ---------------------------------------------------------------
 
@@ -59,23 +58,25 @@ in vec4 vHighlight;
 in float vAngle;
 out vec4 frag;
 
-const float R = ${R};
-const float SQUASH = ${SQUASH};
-const float W = ${W};
-const float SPOT_INNER = ${SPOT_INNER} * R;
+uniform float uChipRadius;
+uniform float uSquash;
+uniform float uSpotHalfWidth;
+uniform float uSpotInnerRadius;
+uniform float uInnerRingRadius;
+uniform vec2 uInnerDash;
 const float PI_4 = 0.7853981633974483;
 const float PI_8 = 0.39269908169872414;
 
 void main() {
   // Circle space: unsquash y so chip-space features stay circular.
-  vec2 q = vec2(vLocal.x, vLocal.y / SQUASH);
+  vec2 q = vec2(vLocal.x, vLocal.y / uSquash);
   float r = length(q);
   float aa = max(fwidth(r), 1e-4);
 
   vec3 rgb = vFace * vDim;
   vec3 spot = vSpot * vDim;
 
-  float body = 1.0 - smoothstep(R - aa, R + aa, r);
+  float body = 1.0 - smoothstep(uChipRadius - aa, uChipRadius + aa, r);
 
   // Rotate circle-space coords for angular features (spots, inner ring dash).
   // The body SDF is radially symmetric so it needs no rotation.
@@ -87,24 +88,24 @@ void main() {
   float ang = atan(qr.y, qr.x);
   float aaA = max(fwidth(ang), 1e-4);
   float patAng = mod(ang - PI_8, PI_4);
-  float spots = 1.0 - smoothstep(W - aaA, W + aaA, min(patAng, PI_4 - patAng));
-  spots *= smoothstep(SPOT_INNER - aa, SPOT_INNER + aa, r) * body;
+  float spots = 1.0 - smoothstep(uSpotHalfWidth - aaA, uSpotHalfWidth + aaA, min(patAng, PI_4 - patAng));
+  spots *= smoothstep(uSpotInnerRadius - aa, uSpotInnerRadius + aa, r) * body;
   rgb = mix(rgb, spot, spots);
 
   // Dashed inner ring: keyed to rotated angle so dash phase rotates with chip.
-  float arc = ang * R * 0.568;
-  float dash = step(mod(arc, 7.0), 4.0);
-  float ringA = (1.0 - smoothstep(-aa, aa, abs(r - R * 0.568) - 0.75)) * dash * body;
+  float arc = ang * uInnerRingRadius;
+  float dash = step(mod(arc, uInnerDash.x), uInnerDash.y);
+  float ringA = (1.0 - smoothstep(-aa, aa, abs(r - uInnerRingRadius) - 0.75)) * dash * body;
   rgb = mix(rgb, spot, ringA * 0.8);
 
   // Hairline rim + bottom arc seam, both reduced to be less prominent.
-  float rimA = (1.0 - smoothstep(-aa, aa, abs(r - R) - 0.5)) * 0.18;
+  float rimA = (1.0 - smoothstep(-aa, aa, abs(r - uChipRadius) - 0.5)) * 0.18;
   rgb = mix(rgb, vec3(0.0), rimA);
-  float arcA = (1.0 - smoothstep(-aa, aa, abs(r - R) - 1.0)) * smoothstep(-aa, aa, vLocal.y) * 0.20;
+  float arcA = (1.0 - smoothstep(-aa, aa, abs(r - uChipRadius) - 1.0)) * smoothstep(-aa, aa, vLocal.y) * 0.20;
   rgb = mix(rgb, vec3(0.0), arcA);
 
   // Highlight ring (merge target).
-  float hiA = (1.0 - smoothstep(-aa, aa, abs(r - R - 2.0) - 1.0)) * vHighlight.a;
+  float hiA = (1.0 - smoothstep(-aa, aa, abs(r - uChipRadius - 2.0) - 1.0)) * vHighlight.a;
   rgb = mix(rgb, vHighlight.rgb, hiA);
 
   float alpha = max(body, max(rimA, max(arcA, hiA)));
@@ -152,45 +153,45 @@ in float vThick;
 in float vAngle;
 out vec4 frag;
 
-const float R = ${R};
-const float SQUASH = ${SQUASH};
-const float W = ${W};
+uniform float uChipRadius;
+uniform float uSquash;
+uniform float uSpotHalfWidth;
 const float PI_4 = 0.7853981633974483;
 const float PI_8 = 0.39269908169872414;
 
 void main() {
   // Circle space: un-squash y so the elliptical faces become circles.
-  vec2 q = vec2(vLocal.x, vLocal.y / SQUASH);
-  float T = vThick / SQUASH;
+  vec2 q = vec2(vLocal.x, vLocal.y / uSquash);
+  float T = vThick / uSquash;
 
   // Cylinder wall SDF. In circle space the visible wall band is the strip:
   //   h(x) <= y <= T + h(x),  |x| <= R,  where h(x) = sqrt(R^2 - x^2).
   // All three boundaries are combined into one min-SDF so every edge gets
   // a single clean AA transition with no alpha compounding at corners.
-  float h = sqrt(max(0.0, R * R - q.x * q.x));
+  float h = sqrt(max(0.0, uChipRadius * uChipRadius - q.x * q.x));
   float dInner = q.y - h;           // +ve below top arc  (into wall)
   float dOuter = T + h - q.y;       // +ve above base arc (into wall)
-  float dSide  = R - abs(q.x);      // +ve inside side tangents
+  float dSide  = uChipRadius - abs(q.x);      // +ve inside side tangents
   float dWall  = min(min(dInner, dOuter), dSide);
   float aa = max(fwidth(dWall), 1e-4);
   float wall = smoothstep(-aa, aa, dWall);
 
   // Stripes: keyed to rim x-position (acos(x/R)) offset by chip rotation,
   // using a modular period test matching the face spots above.
-  float rimAngle = acos(clamp(q.x / R, -1.0, 1.0)) - vAngle;
+  float rimAngle = acos(clamp(q.x / uChipRadius, -1.0, 1.0)) - vAngle;
   float aaA = max(fwidth(rimAngle), 1e-4);
   float patRim = mod(rimAngle - PI_8, PI_4);
-  float stripe = 1.0 - smoothstep(W - aaA, W + aaA, min(patRim, PI_4 - patRim));
+  float stripe = 1.0 - smoothstep(uSpotHalfWidth - aaA, uSpotHalfWidth + aaA, min(patRim, PI_4 - patRim));
 
   // Cylinder shading: brighter at front (curve), darker toward base (AO).
-  float curve = h / R;
+  float curve = h / uChipRadius;
   float down  = clamp(dInner / max(T, 0.001), 0.0, 1.0);
   vec3 base = mix(vFace, vSpot, stripe) * vDim;
   base *= 0.60 + 0.28 * curve;
   base *= 1.0 - 0.22 * down;
 
   // Groove line at the base seam.
-  float dBot = length(q - vec2(0.0, T)) - R;
+  float dBot = length(q - vec2(0.0, T)) - uChipRadius;
   float groove = (1.0 - smoothstep(-aa, aa, abs(dBot) - 0.5)) * smoothstep(-aa, aa, q.y - T);
   base = mix(base, vec3(0.0), groove * 0.38);
 
