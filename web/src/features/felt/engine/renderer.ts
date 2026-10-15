@@ -143,7 +143,7 @@ class Renderer {
         count++;
         i++;
       }
-      this.flush(kind, count);
+      this.flush(kind, count, offset);
     }
   }
 
@@ -237,7 +237,7 @@ class Renderer {
     }
   }
 
-  private flush(kind: Kind, count: number) {
+  private flush(kind: Kind, count: number, floats: number) {
     if (count === 0) return;
     const gl = this.gl;
     const pass = this.passes[kind];
@@ -247,7 +247,7 @@ class Renderer {
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, this.atlas.texture);
     }
-    pass.batch.draw(this.scratch[kind], count);
+    pass.batch.draw(this.scratch[kind], floats, count);
   }
 }
 

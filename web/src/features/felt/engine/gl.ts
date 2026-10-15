@@ -81,7 +81,9 @@ export function createQuadVAO(
   return vao;
 }
 
-// Dynamic instance stream: upload + instanced draw in one call.
+// Dynamic instance stream: upload + instanced draw in one call. Only the
+// used prefix of `data` is uploaded — callers pack into a shared scratch
+// buffer that is usually larger than one run.
 export class Batch {
   readonly instanceFloats: number;
   private gl: WebGL2RenderingContext;
@@ -112,12 +114,12 @@ export class Batch {
     this.capacity = capacity;
   }
 
-  draw(data: Float32Array, instances: number) {
+  draw(data: Float32Array, floats: number, instances: number) {
     if (instances === 0) return;
-    this.reserve(data.length);
+    this.reserve(floats);
     const gl = this.gl;
     gl.bindBuffer(gl.ARRAY_BUFFER, this.buffer);
-    gl.bufferSubData(gl.ARRAY_BUFFER, 0, data);
+    gl.bufferSubData(gl.ARRAY_BUFFER, 0, data, 0, floats);
     gl.bindVertexArray(this.vao);
     gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, instances);
     gl.bindVertexArray(null);

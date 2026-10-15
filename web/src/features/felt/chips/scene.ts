@@ -209,6 +209,15 @@ export function buildScene(o: {
   const stacks = [...board.stacks].sort(
     (a, b) => slotPosition(a.slot).y - slotPosition(b.slot).y,
   );
+  // Contact shadows, hoisted into one consecutive run ahead of the stacks.
+  // A shadow never reaches neighboring chip ink (lattice spacing keeps them
+  // clear), so drawing them all first is visually identical to interleaving
+  // and saves one kind-switch — one draw call — per stack.
+  for (const stack of stacks) {
+    const { x, y } = slotPosition(stack.slot);
+    items.push(shadow(x, y + STACK_LIFT + 1.5, 2.5, 0.25, 4));
+  }
+
   for (const stack of stacks) {
     const isMergeTarget = mergeTarget?.id === stack.id;
     const dimFactor = drag !== null && !isMergeTarget ? 0.5 : 1;
@@ -219,9 +228,6 @@ export function buildScene(o: {
       for (let i = 0; i < run.count; i++) kindAt.push(run.kind);
     }
 
-    // Contact shadow under the stack's base.
-    items.push(shadow(x, y + STACK_LIFT + 1.5, 2.5, 0.25, 4));
-
     const hovered = hover?.stackId === stack.id ? hover : null;
     const liftState = lift?.stackId === stack.id ? lift : null;
     // The cut structure rides the lift state so the preview decays smoothly
@@ -230,53 +236,64 @@ export function buildScene(o: {
     const liftValue = liftState?.value ?? 0;
     const topHover = hovered?.isTop === true;
 
-    for (let d = 0; d < size; d++) {
-      const kind = kindAt[d];
-      const palette = colors.tiers[kind % colors.tiers.length];
-      const cx = x;
-      const cy = y - d * STACK_LIFT - (cut !== null && d >= cut ? liftValue : 0);
-      // Top chip of the whole stack always unrotated; others get a stable random angle.
-      const isTop = d === size - 1;
-      const angle = isTop ? 0 : chipAngle(stack.id, d);
-      if (cut !== null && d === cut) {
-        // Ghost dashed ellipse at the cut plane, under the lifted upper half.
-        items.push(
-          ring(cx, y - cut * STACK_LIFT, CHIP_RADIUS, CHIP_RADIUS * CHIP_SQUASH, 2, [4, 4], rgba(colors.orange, 1), null),
-        );
-      }
-      // Every chip draws its wall; only exposed segment tops draw a face —
-      // the chip above covers the faces below, so the rest would be hidden.
+    // Per-depth geometry helpers. Walls go in one run and exposed faces in
+    // another: the renderer batches consecutive same-kind items, so this is
+    // ~3 draw calls per stack instead of ~3 per chip. The reordering is
+    // order-safe — walls of different depths overlap each other and the one
+    // exposed face below them, and both keep their relative order here.
+    const cyAt = (d: number) =>
+      y - d * STACK_LIFT - (cut !== null && d >= cut ? liftValue : 0);
+    const angleAt = (d: number) => (d === size - 1 ? 0 : chipAngle(stack.id, d));
+    const pushWall = (d: number) => {
+      const palette = colors.tiers[kindAt[d] % colors.tiers.length];
       items.push({
         kind: 'wall',
-        x: cx,
-        y: cy,
+        x,
+        y: cyAt(d),
         face: palette.face,
         spot: palette.spot,
         dim: dimFactor,
         thickness: STACK_LIFT,
-        angle,
+        angle: angleAt(d),
       });
-      const isSegmentTop = isTop || (cut !== null && d === cut - 1);
-      if (isSegmentTop) {
-        items.push({
-          kind: 'chip',
-          x: cx,
-          y: cy,
-          face: palette.face,
-          spot: palette.spot,
-          dim: dimFactor,
-          highlight: topHover && isTop ? rgba(colors.blue, 1) : null,
-          angle,
-        });
-        pushLabel(
-          items,
-          fonts.chip,
-          chipLabel(board.catalog[kind].value),
-          cx,
-          cy + 0.5,
-          shade(palette.text, dimFactor),
-        );
-      }
+    };
+    // Only exposed segment tops draw a face — the chip above covers the
+    // faces below, so the rest would be hidden.
+    const pushFace = (d: number) => {
+      const palette = colors.tiers[kindAt[d] % colors.tiers.length];
+      items.push({
+        kind: 'chip',
+        x,
+        y: cyAt(d),
+        face: palette.face,
+        spot: palette.spot,
+        dim: dimFactor,
+        highlight: topHover && d === size - 1 ? rgba(colors.blue, 1) : null,
+        angle: angleAt(d),
+      });
+      pushLabel(
+        items,
+        fonts.chip,
+        chipLabel(board.catalog[kindAt[d]].value),
+        x,
+        cyAt(d) + 0.5,
+        shade(palette.text, dimFactor),
+      );
+    };
+
+    if (cut === null) {
+      for (let d = 0; d < size; d++) pushWall(d);
+      pushFace(size - 1);
+    } else {
+      // Cut stack: lower half, then the ghost dashed ellipse at the cut
+      // plane, then the lifted upper half — same relative order as before.
+      for (let d = 0; d < cut; d++) pushWall(d);
+      if (cut > 0) pushFace(cut - 1);
+      items.push(
+        ring(x, y - cut * STACK_LIFT, CHIP_RADIUS, CHIP_RADIUS * CHIP_SQUASH, 2, [4, 4], rgba(colors.orange, 1), null),
+      );
+      for (let d = cut; d < size; d++) pushWall(d);
+      pushFace(size - 1);
     }
   }
 
