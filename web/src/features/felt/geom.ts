@@ -1,5 +1,3 @@
-// Felt-space 2D primitives, in CSS px.
-
 // A width/height in px.
 export type Size = { w: number; h: number };
 

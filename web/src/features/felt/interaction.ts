@@ -1,47 +1,50 @@
 import { CHIP_RADIUS, CHIP_SQUASH, STACK_LIFT } from './world';
 import { allSlots, slotPosition, type Slot } from './lattice';
-import { stackSize, type Board, type Stack, type StackId } from './board';
+import { stackSize, type Felt, type Stack, type StackId } from './felt';
 import type { Point } from './geom';
 
-// Felt interaction semantics: what a pointer position means against the
-// resting board. Pure geometry over the chips Board + the felt world —
-// no DOM, no React, no GL. The feel knobs live here too.
+/** Pointer semantics against the resting felt, as pure geometry. */
 
-// Interaction constants — the feel knobs.
-export const PREVIEW_LIFT = 10; // hover preview: how far the upper half rises
-export const COMBINE_BAND = 16; // vertical combine band above a stack's top chip
-export const COMBINE_HALF_WIDTH = 20; // horizontal tolerance for the band
+/** Hover preview lift for the upper half, in px. */
+export const PREVIEW_LIFT = 10;
 
-// The stack's top chip offset above its base, in px.
+/** Combine band height above a stack's top chip, in px. */
+export const COMBINE_BAND = 16;
+
+/** Combine band horizontal half-tolerance, in px. */
+export const COMBINE_HALF_WIDTH = 20;
+
+/**
+ * Top chip's offset above the stack's base, in px.
+ * @param stack - The stack to measure.
+ */
 export function stackTopOffset(stack: Stack): number {
   return (stackSize(stack) - 1) * STACK_LIFT;
 }
 
+/** A pointer hit: stack, chip depth, and whether it's the top chip. */
 export type Pick = { stackId: StackId; depth: number; isTop: boolean };
 
-// Hit-test against resting geometry. A chip is a squashed face ellipse
-// plus its wall band below; the topmost chip whose face or wall contains
-// the point wins, so preview animation can never shift the target under
-// the cursor.
-export function pickAt(board: Board, point: Point): Pick | null {
-  for (const stack of board.stacks) {
+/**
+ * Topmost chip containing the point, so previews can't shift the target under the cursor.
+ * @param felt - The felt to hit-test against.
+ * @param point - The pointer position in felt pixels.
+ */
+export function pickAt(felt: Felt, point: Point): Pick | null {
+  for (const stack of felt.stacks) {
     const { x: sx, y: sy } = slotPosition(stack.slot);
     if (Math.abs(sx - point.x) > CHIP_RADIUS) continue;
+
     const size = stackSize(stack);
-    if (point.y < sy - stackTopOffset(stack) - CHIP_RADIUS * CHIP_SQUASH) continue;
+    const topOffset = stackTopOffset(stack);
+    if (point.y < sy - topOffset - CHIP_RADIUS * CHIP_SQUASH) continue;
     if (point.y > sy + CHIP_RADIUS * CHIP_SQUASH + STACK_LIFT) continue;
+
     for (let depth = size - 1; depth >= 0; depth--) {
-      const cy = sy - depth * STACK_LIFT;
+      const chipY = sy - depth * STACK_LIFT;
       const dx = sx - point.x;
-      const dy = point.y - cy;
-      // Face ellipse.
-      const ey = dy / CHIP_SQUASH;
-      if (dx * dx + ey * ey <= CHIP_RADIUS * CHIP_RADIUS) {
-        return { stackId: stack.id, depth, isTop: depth === size - 1 };
-      }
-      // Wall band below the face belongs to this chip.
-      const h = Math.sqrt(Math.max(0, CHIP_RADIUS * CHIP_RADIUS - dx * dx)) * CHIP_SQUASH;
-      if (dy > h && dy <= h + STACK_LIFT) {
+      const dy = point.y - chipY;
+      if (faceContains(dx, dy) || wallContains(dx, dy)) {
         return { stackId: stack.id, depth, isTop: depth === size - 1 };
       }
     }
@@ -49,35 +52,34 @@ export function pickAt(board: Board, point: Point): Pick | null {
   return null;
 }
 
+/** Whether an offset from a chip's center lands inside its face ellipse. */
+function faceContains(dx: number, dy: number): boolean {
+  const ey = dy / CHIP_SQUASH;
+  return dx * dx + ey * ey <= CHIP_RADIUS * CHIP_RADIUS;
+}
+
+/** Whether an offset from a chip's center lands in the wall band below its face. */
+function wallContains(dx: number, dy: number): boolean {
+  const halfHeight = Math.sqrt(Math.max(0, CHIP_RADIUS * CHIP_RADIUS - dx * dx)) * CHIP_SQUASH;
+  return dy > halfHeight && dy <= halfHeight + STACK_LIFT;
+}
+
+/** The outcome of releasing the hand at a point. */
 export type Landing =
   | { type: 'combine'; stackId: StackId; slot: Slot; ring: Point }
   | { type: 'place'; slot: Slot; ring: Point }
   | { type: 'none' };
 
-// What would happen if the hand were released at this point. The single
-// authority for the landing preview and the commit — they cannot diverge.
-//
-// Combine: a stack whose top chip meets the hand's bottom chip — a thin
-// band at the top of the existing stack, never its body. Otherwise the
-// nearest FREE slot: an occupied slot never combines implicitly.
-export function landingFor(board: Board, point: Point): Landing {
-  const hand = board.hand;
+/**
+ * Single authority for the landing preview and the commit; occupied slots never combine implicitly.
+ * @param felt - The felt holding the hand and resting stacks.
+ * @param point - The pointer position in felt pixels.
+ */
+export function landingFor(felt: Felt, point: Point): Landing {
+  const hand = felt.hand;
   if (!hand || hand.chips.length === 0) return { type: 'none' };
 
-  let target: Stack | null = null;
-  let bestD = Infinity;
-  for (const stack of board.stacks) {
-    const { x: sx, y: sy } = slotPosition(stack.slot);
-    const topY = sy - stackTopOffset(stack);
-    if (point.y < topY - COMBINE_BAND || point.y > topY + 4) continue;
-    const dx = Math.abs(sx - point.x);
-    if (dx > COMBINE_HALF_WIDTH) continue;
-    const d = dx + Math.abs(topY - point.y);
-    if (d < bestD) {
-      bestD = d;
-      target = stack;
-    }
-  }
+  const target = combineTargetAt(felt, point);
   if (target) {
     const { x, y } = slotPosition(target.slot);
     return {
@@ -88,37 +90,78 @@ export function landingFor(board: Board, point: Point): Landing {
     };
   }
 
-  const slot = nearestFreeSlot(board, point.x, point.y);
+  const slot = nearestFreeSlot(felt, point.x, point.y);
   if (slot) return { type: 'place', slot, ring: slotPosition(slot) };
   return { type: 'none' };
 }
 
-// Nearest lattice slot with no stack on it. Null when the felt is full.
-export function nearestFreeSlot(board: Board, x: number, y: number): Slot | null {
-  const occupied = new Set(board.stacks.map((s) => `${s.slot.col},${s.slot.row}`));
-  let best: Slot | null = null;
-  let bestD = Infinity;
-  for (const slot of allSlots(board.felt)) {
-    if (occupied.has(`${slot.col},${slot.row}`)) continue;
-    const { x: sx, y: sy } = slotPosition(slot);
-    const d = (sx - x) ** 2 + (sy - y) ** 2;
-    if (d < bestD) {
-      bestD = d;
-      best = slot;
+/**
+ * Nearest stack whose top chip is within the combine band, or null.
+ * @param felt - The felt whose stacks are searched.
+ * @param point - The pointer position in felt pixels.
+ */
+function combineTargetAt(felt: Felt, point: Point): Stack | null {
+  let target: Stack | null = null;
+  let bestDistance = Infinity;
+  for (const stack of felt.stacks) {
+    const { x: sx, y: sy } = slotPosition(stack.slot);
+    const topY = sy - stackTopOffset(stack);
+    if (point.y < topY - COMBINE_BAND || point.y > topY + 4) continue;
+
+    const dx = Math.abs(sx - point.x);
+    if (dx > COMBINE_HALF_WIDTH) continue;
+
+    const distance = dx + Math.abs(topY - point.y);
+    if (distance < bestDistance) {
+      bestDistance = distance;
+      target = stack;
     }
   }
-  return best;
+  return target;
 }
 
-// Nearest slot regardless of occupancy — the felt-full commit fallback.
-export function nearestSlotAny(board: Board, x: number, y: number): Slot | null {
+/**
+ * Nearest unoccupied slot, or null when the felt is full.
+ * @param felt - The felt whose stacks and surface define occupancy.
+ * @param x - The pointer x in felt pixels.
+ * @param y - The pointer y in felt pixels.
+ */
+export function nearestFreeSlot(felt: Felt, x: number, y: number): Slot | null {
+  const occupied = new Set(felt.stacks.map((s) => `${s.slot.col},${s.slot.row}`));
+  return nearestSlotWhere(felt, x, y, (slot) => !occupied.has(`${slot.col},${slot.row}`));
+}
+
+/**
+ * Nearest slot regardless of occupancy — the felt-full fallback.
+ * @param felt - The felt whose surface defines the slot set.
+ * @param x - The pointer x in felt pixels.
+ * @param y - The pointer y in felt pixels.
+ */
+export function nearestSlotAny(felt: Felt, x: number, y: number): Slot | null {
+  return nearestSlotWhere(felt, x, y, () => true);
+}
+
+/**
+ * Nearest slot passing the filter, or null.
+ * @param felt - The felt whose surface defines the slot set.
+ * @param x - The pointer x in felt pixels.
+ * @param y - The pointer y in felt pixels.
+ * @param isCandidate - Decides whether a slot may be returned.
+ */
+function nearestSlotWhere(
+  felt: Felt,
+  x: number,
+  y: number,
+  isCandidate: (slot: Slot) => boolean,
+): Slot | null {
   let best: Slot | null = null;
-  let bestD = Infinity;
-  for (const slot of allSlots(board.felt)) {
+  let bestDistance = Infinity;
+  for (const slot of allSlots(felt.felt)) {
+    if (!isCandidate(slot)) continue;
     const { x: sx, y: sy } = slotPosition(slot);
-    const d = (sx - x) ** 2 + (sy - y) ** 2;
-    if (d < bestD) {
-      bestD = d;
+    const distance = (sx - x) ** 2 + (sy - y) ** 2;
+    if (distance < bestDistance) {
+      bestDistance = distance;
       best = slot;
     }
   }

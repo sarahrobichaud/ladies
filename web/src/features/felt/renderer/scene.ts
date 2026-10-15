@@ -1,4 +1,4 @@
-// The scene builder: pure translation from Board + interaction state to
+// The scene builder: pure translation from Felt + interaction state to
 // renderer primitives, in painter's order. No GL, no React.
 
 import { CHIP_RADIUS, CHIP_SQUASH, STACK_LIFT } from '../world';
@@ -6,7 +6,7 @@ import type { FontFace } from './text';
 import type { SceneItem } from './primitives';
 import { chipLabel, formatChips } from '../../../snapshot';
 import { runsValue } from '../../chips/runs';
-import { stackSize, type Board, type Stack } from '../board';
+import { stackSize, type Felt, type Stack } from '../felt';
 import { allSlots, slotPosition } from '../lattice';
 import { landingFor, stackTopOffset, type Landing, type Pick } from '../interaction';
 import type { Point } from '../geom';
@@ -70,7 +70,7 @@ export type SceneFonts = { chip: FontFace; badge: FontFace };
 
 /** Inputs to the scene builder for one frame. */
 export type SceneInput = {
-  board: Board;
+  felt: Felt;
   handPos: Point | null;
   drag: Drag | null;
   hover: Pick | null;
@@ -92,39 +92,39 @@ type StackContext = {
 /**
  * Build the frame's draw list: lattice, landing preview, stacks, hand,
  * and hover badge, in painter's order.
- * @param input - board state, interaction state, colors, fonts, and time
+ * @param input - felt state, interaction state, colors, fonts, and time
  * @returns draw items in painter's order; the renderer packs and draws them as-is
  */
 export function buildScene(input: SceneInput): SceneItem[] {
-  const { board, handPos, drag, hover, lift, colors, time, fonts } = input;
+  const { felt, handPos, drag, hover, lift, colors, time, fonts } = input;
   const items: SceneItem[] = [];
 
-  pushLattice(items, board, colors);
+  pushLattice(items, felt, colors);
 
-  const landing = board.hand && handPos ? landingFor(board, handPos) : null;
+  const landing = felt.hand && handPos ? landingFor(felt, handPos) : null;
   const mergeTarget =
     landing?.type === 'combine'
-      ? (board.stacks.find((s) => s.id === landing.stackId) ?? null)
+      ? (felt.stacks.find((s) => s.id === landing.stackId) ?? null)
       : null;
 
   pushLandingGhost(items, landing, colors);
   if (mergeTarget) pushMergeHalo(items, mergeTarget, colors, time);
 
-  const stacks = stacksBackToFront(board);
+  const stacks = stacksBackToFront(felt);
   pushStackShadows(items, stacks);
   for (const stack of stacks) {
-    pushStack(items, board, stack, mergeTarget, { drag, hover, lift, colors, fonts });
+    pushStack(items, felt, stack, mergeTarget, { drag, hover, lift, colors, fonts });
   }
 
-  pushHand(items, board, handPos, colors, fonts);
-  pushHoverBadge(items, board, hover, drag, colors, fonts);
+  pushHand(items, felt, handPos, colors, fonts);
+  pushHoverBadge(items, felt, hover, drag, colors, fonts);
 
   return items;
 }
 
 /** Draw one dashed ring per lattice slot, squashed to match chip faces. */
-function pushLattice(items: SceneItem[], board: Board, colors: SceneColors) {
-  for (const slot of allSlots(board.felt)) {
+function pushLattice(items: SceneItem[], felt: Felt, colors: SceneColors) {
+  for (const slot of allSlots(felt.felt)) {
     const { x, y } = slotPosition(slot);
     items.push(
       ring(
@@ -187,8 +187,8 @@ function pushMergeHalo(
 }
 
 /** Order stacks bottom-of-screen first, so lower stacks occlude higher ones. */
-function stacksBackToFront(board: Board): Stack[] {
-  return [...board.stacks].sort(
+function stacksBackToFront(felt: Felt): Stack[] {
+  return [...felt.stacks].sort(
     (a, b) => slotPosition(a.slot).y - slotPosition(b.slot).y,
   );
 }
@@ -204,7 +204,7 @@ function pushStackShadows(items: SceneItem[], stacks: Stack[]) {
 /** Draw one stack: walls in one run, then the exposed faces with labels. */
 function pushStack(
   items: SceneItem[],
-  board: Board,
+  felt: Felt,
   stack: Stack,
   mergeTarget: Stack | null,
   ctx: StackContext,
@@ -255,7 +255,7 @@ function pushStack(
     pushLabel(
       items,
       fonts.chip,
-      chipLabel(board.catalog[kindAt[depth]].value),
+      chipLabel(felt.catalog[kindAt[depth]].value),
       x,
       cyAt(depth) + LABEL_BASELINE_OFFSET,
       shade(palette.text, dimFactor),
@@ -289,17 +289,17 @@ function kindsAt(stack: Stack): number[] {
 /** Draw the held hand: a soft shadow plus a wall, face, and label per chip. */
 function pushHand(
   items: SceneItem[],
-  board: Board,
+  felt: Felt,
   handPos: Point | null,
   colors: SceneColors,
   fonts: SceneFonts,
 ) {
-  if (!board.hand || !handPos) return;
+  if (!felt.hand || !handPos) return;
 
   // Held above the table: a softer, wider shadow offset further down.
   items.push(shadow(handPos.x, handPos.y + STACK_LIFT + HAND_SHADOW_DROP, HAND_SHADOW_SPREAD, HAND_SHADOW_ALPHA, HAND_SHADOW_SOFT));
 
-  const chips = board.hand.chips;
+  const chips = felt.hand.chips;
   const topIndex = chips.length - 1;
 
   for (let i = 0; i < chips.length; i++) {
@@ -332,7 +332,7 @@ function pushHand(
     pushLabel(
       items,
       fonts.chip,
-      chipLabel(board.catalog[chip.kind].value),
+      chipLabel(felt.catalog[chip.kind].value),
       handPos.x,
       cy + LABEL_BASELINE_OFFSET,
       palette.text,
@@ -343,7 +343,7 @@ function pushHand(
 /** Draw the hovered stack's value badge above its top chip. */
 function pushHoverBadge(
   items: SceneItem[],
-  board: Board,
+  felt: Felt,
   hover: Pick | null,
   drag: Drag | null,
   colors: SceneColors,
@@ -351,12 +351,12 @@ function pushHoverBadge(
 ) {
   if (!hover || drag) return;
 
-  const stack = board.stacks.find((s) => s.id === hover.stackId);
+  const stack = felt.stacks.find((s) => s.id === hover.stackId);
   if (!stack) return;
 
   const { x, y } = slotPosition(stack.slot);
   const badgeY = Math.max(BADGE_MIN_Y, y - stackTopOffset(stack) - BADGE_LIFT - BADGE_CLEARANCE);
-  const text = formatChips(runsValue(stack.runs, board.catalog));
+  const text = formatChips(runsValue(stack.runs, felt.catalog));
   const textWidth = fonts.badge.width(text);
 
   items.push({

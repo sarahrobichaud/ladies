@@ -15,7 +15,7 @@ import {
   type Pick,
 } from './interaction';
 import { STACK_LIFT } from './world';
-import { STACK_CAPACITY, clearBoard, commitHand, createBoard, discardHand, pickFrom, pickStack, pickTop, setFelt, sizeHand, spawnStack, takeFromTray, totalValue, type Board } from './board';
+import { STACK_CAPACITY, clearBoard, commitHand, createBoard, discardHand, pickFrom, pickStack, pickTop, setFelt as resizeFelt, sizeHand, spawnStack, takeFromTray, totalValue, type Felt } from './felt';
 import { coalesce } from '../chips/runs';
 import type { Catalog, Run } from '../chips/types';
 import type { Point } from './geom';
@@ -45,7 +45,7 @@ function randomRuns(catalog: Catalog): Run[] {
 
 export function ChipLab() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const [board, setBoard] = useState<Board>(() => createBoard(CATALOG, { w: 0, h: 0 }));
+  const [felt, setFelt] = useState<Felt>(() => createBoard(CATALOG, { w: 0, h: 0 }));
   const [handPos, setHandPos] = useState<Point | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
   const [spawn, setSpawn] = useState<Spawn | null>(null);
@@ -55,14 +55,14 @@ export function ChipLab() {
 
   const canvasRect = () => canvasRef.current?.getBoundingClientRect() ?? null;
 
-  const total = totalValue(board);
+  const total = totalValue(felt);
 
   // Mirror the scene for the rAF loop and the native wheel listener. The
   // assignment runs in an effect (after render) so events always see the
   // latest committed state.
-  const sceneRef = useRef({ board, handPos, drag, spawn, hover });
+  const sceneRef = useRef({ felt, handPos, drag, spawn, hover });
   useEffect(() => {
-    sceneRef.current = { board, handPos, drag, spawn, hover };
+    sceneRef.current = { felt, handPos, drag, spawn, hover };
   });
   const liftRef = useRef<Lift | null>(null);
   const colorsRef = useRef(resolveSceneColors());
@@ -84,7 +84,7 @@ export function ChipLab() {
     const onWheel = (e: WheelEvent) => {
       if (!sceneRef.current.drag || e.deltaY === 0) return;
       e.preventDefault();
-      setBoard((b) => sizeHand(b, e.deltaY < 0 ? 1 : -1));
+      setFelt((felt) => sizeHand(felt, e.deltaY < 0 ? 1 : -1));
     };
     el.addEventListener('wheel', onWheel, { passive: false });
     return () => el.removeEventListener('wheel', onWheel);
@@ -95,11 +95,11 @@ export function ChipLab() {
     const el = canvasRef.current;
     if (!el) return;
     const observer = new ResizeObserver(([entry]) => {
-      const felt = { w: entry.contentRect.width, h: entry.contentRect.height };
-      setBoard((b) => setFelt(b, felt));
+      const size = { w: entry.contentRect.width, h: entry.contentRect.height };
+      setFelt((felt) => resizeFelt(felt, size));
       const dpr = window.devicePixelRatio || 1;
-      el.width = Math.max(1, Math.round(felt.w * dpr));
-      el.height = Math.max(1, Math.round(felt.h * dpr));
+      el.width = Math.max(1, Math.round(size.w * dpr));
+      el.height = Math.max(1, Math.round(size.h * dpr));
       dprRef.current = dpr;
     });
     observer.observe(el);
@@ -119,7 +119,7 @@ export function ChipLab() {
     if (!renderer) return;
     let raf = 0;
     const loop = (time: number) => {
-      const { board, handPos, drag, hover } = sceneRef.current;
+      const { felt, handPos, drag, hover } = sceneRef.current;
       const colors = colorsRef.current;
 
       // Lift animation: grows while a cut is hovered, decays after.
@@ -141,8 +141,8 @@ export function ChipLab() {
         chip: renderer.font(11, colors.bodyFont, '600', dpr),
         badge: renderer.font(12, colors.bodyFont, '600', dpr),
       };
-      const scene = buildScene({ board, handPos, drag, hover, lift: ls, colors, time, fonts });
-      renderer.render(scene, board.felt.w, board.felt.h);
+      const scene = buildScene({ felt, handPos, drag, hover, lift: ls, colors, time, fonts });
+      renderer.render(scene, felt.felt.w, felt.felt.h);
       raf = requestAnimationFrame(loop);
     };
     raf = requestAnimationFrame(loop);
@@ -171,7 +171,7 @@ export function ChipLab() {
       if (Math.hypot(e.clientX - spawn.startX, e.clientY - spawn.startY) < SPAWN_THRESHOLD) return;
       const rect = canvasRect();
       if (!rect) return;
-      setBoard(takeFromTray(board, spawn.kind));
+      setFelt(takeFromTray(felt, spawn.kind));
       setSpawn(null);
       setHandPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
       setDrag({ pointerId: e.pointerId, grabX: 0, grabY: 0 });
@@ -179,7 +179,7 @@ export function ChipLab() {
     } else {
       const rect = canvasRect();
       if (!rect) return;
-      setHover(pickAt(board, { x: e.clientX - rect.left, y: e.clientY - rect.top }));
+      setHover(pickAt(felt, { x: e.clientX - rect.left, y: e.clientY - rect.top }));
     }
   };
 
@@ -194,22 +194,22 @@ export function ChipLab() {
         e.clientY >= rect.top &&
         e.clientY <= rect.bottom;
       if (!overCanvas) {
-        setBoard(discardHand(board));
+        setFelt(discardHand(felt));
         setHandPos(null);
         return;
       }
-      const landingAt = landingFor(board, handPos);
+      const landingAt = landingFor(felt, handPos);
       const slot: Slot | null =
-        landingAt.type === 'none' ? nearestSlotAny(board, handPos.x, handPos.y) : landingAt.slot;
+        landingAt.type === 'none' ? nearestSlotAny(felt, handPos.x, handPos.y) : landingAt.slot;
       if (!slot) return;
-      setBoard(commitHand(board, slot));
+      setFelt(commitHand(felt, slot));
       setHandPos(null);
     } else if (spawn && spawn.pointerId === e.pointerId) {
       setSpawn(null);
       const rect = canvasRect();
       if (!rect) return;
-      const slot = nearestFreeSlot(board, rect.width / 2, rect.height / 2);
-      if (slot) setBoard(spawnStack(board, [{ kind: spawn.kind, count: 1 }], slot));
+      const slot = nearestFreeSlot(felt, rect.width / 2, rect.height / 2);
+      if (slot) setFelt(spawnStack(felt, [{ kind: spawn.kind, count: 1 }], slot));
     }
   };
 
@@ -219,9 +219,9 @@ export function ChipLab() {
     const rect = canvasRect();
     if (!rect) return;
     const point = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-    const pick = pickAt(board, point);
+    const pick = pickAt(felt, point);
     if (!pick) return;
-    const stack = board.stacks.find((s) => s.id === pick.stackId);
+    const stack = felt.stacks.find((s) => s.id === pick.stackId);
     if (!stack) return;
     const { x: sx, y: sy } = slotPosition(stack.slot);
     const previewLift =
@@ -229,12 +229,12 @@ export function ChipLab() {
     const visual = { x: sx, y: sy - pick.depth * STACK_LIFT - previewLift };
     const next =
       e.button === 2
-        ? pickStack(board, stack.id)
+        ? pickStack(felt, stack.id)
         : pick.isTop
-          ? pickTop(board, stack.id)
-          : pickFrom(board, stack.id, pick.depth);
-    if (next === board) return;
-    setBoard(next);
+          ? pickTop(felt, stack.id)
+          : pickFrom(felt, stack.id, pick.depth);
+    if (next === felt) return;
+    setFelt(next);
     setHover(null);
     setHandPos(visual);
     setDrag({
@@ -255,8 +255,8 @@ export function ChipLab() {
   // Fill every lattice slot with a random stack — worst case for the
   // renderer (max stacks × max chips) and for pick/landing hit-testing.
   const stressTest = () => {
-    setBoard((b) => {
-      let next = clearBoard(b);
+    setFelt((felt) => {
+      let next = clearBoard(felt);
       const slots = allSlots(next.felt);
       for (let i = slots.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
@@ -271,13 +271,13 @@ export function ChipLab() {
 
   const addNotation = () => {
     try {
-      const runs = parseRuns(notation, board.catalog);
-      const slot = nearestFreeSlot(board, board.felt.w / 2, board.felt.h / 2);
+      const runs = parseRuns(notation, felt.catalog);
+      const slot = nearestFreeSlot(felt, felt.felt.w / 2, felt.felt.h / 2);
       if (!slot) {
         setNotationError('the felt is full');
         return;
       }
-      setBoard(spawnStack(board, runs, slot));
+      setFelt(spawnStack(felt, runs, slot));
       setNotation('');
       setNotationError(null);
     } catch (err) {
@@ -327,7 +327,7 @@ export function ChipLab() {
           <button
             type="button"
             className="rounded-md border border-line bg-raised px-3 py-1.5 text-sm text-ink hover:bg-blue-tint"
-            onClick={() => setBoard(clearBoard(board))}
+            onClick={() => setFelt(clearBoard(felt))}
           >
             Clear table
           </button>
@@ -340,7 +340,7 @@ export function ChipLab() {
 
       {/* Specimen strip: every palette tier, for component reference */}
       <div className="flex items-center gap-4 rounded-xl border border-line bg-surface p-3 shadow-lg">
-        {board.catalog.map((kind, kindId) => (
+        {felt.catalog.map((kind, kindId) => (
           <div key={kindId} className="flex flex-col items-center gap-1">
             <Chip value={kind.value} tier={kind.tier} />
             <span className="text-[10px] text-muted">{chipLabel(kind.value)}</span>
@@ -358,7 +358,7 @@ export function ChipLab() {
         {/* Chip tray */}
         <div className="flex w-36 shrink-0 flex-col gap-2 rounded-xl border border-line bg-surface p-3 shadow-lg">
           <p className="text-[10px] uppercase tracking-wide text-muted">Tray</p>
-          {board.catalog.map((kind, kindId) => (
+          {felt.catalog.map((kind, kindId) => (
             <div
               key={kindId}
               className="draggable cursor-grab self-start"
@@ -388,7 +388,7 @@ export function ChipLab() {
             onPointerCancel={cancelGesture}
             onPointerLeave={() => setHover(null)}
           />
-          {board.stacks.length === 0 && !board.hand && (
+          {felt.stacks.length === 0 && !felt.hand && (
             <p className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-on-felt/50">
               Empty felt — add chips from the tray
             </p>
