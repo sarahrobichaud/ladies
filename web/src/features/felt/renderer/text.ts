@@ -1,3 +1,5 @@
+// PROTO TO BE REPLACED
+
 // Canvas-rasterized glyph atlas: one texture shared by every font size,
 // grown by re-rasterizing when full. Metrics are in CSS px; glyphs are
 // rasterized at `scale`× (devicePixelRatio) for sharpness. Only the alpha
