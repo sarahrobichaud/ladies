@@ -1,6 +1,6 @@
 import { Route, Routes } from 'react-router';
 import { ThemeToggle } from './components/theme-toggle';
-import { ChipLab } from './pages/chip-lab';
+import { ChipLab } from './features/felt/chip-lab';
 import { ConfigPage } from './pages/config-page';
 import { TablePage } from './pages/table-page';
 

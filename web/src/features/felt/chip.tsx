@@ -1,5 +1,5 @@
 import type { CSSProperties } from 'react';
-import { chipLabel } from '../snapshot';
+import { chipLabel } from '../../snapshot';
 import { CHIP_TIERS } from './chip-palette';
 
 export function Chip({

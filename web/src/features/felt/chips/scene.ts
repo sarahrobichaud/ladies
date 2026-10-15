@@ -8,11 +8,11 @@
 // striped wall band per chip. Data stays compressed in the Board — the
 // per-chip items exist only as draw-list entries.
 
-import { CHIP_TIER_VARS } from '../components/chip-palette';
+import { CHIP_TIER_VARS } from '../chip-palette';
 import { CHIP_SQUASH } from '../engine/primitives';
 import type { FontFace } from '../engine/text';
 import type { RGB, RGBA, RingItem, SceneItem } from '../engine/primitives';
-import { chipLabel, formatChips } from '../snapshot';
+import { chipLabel, formatChips } from '../../../snapshot';
 import { runsValue } from './model';
 import { allSlots, CHIP_RADIUS, slotPosition } from './lattice';
 import { STACK_LIFT, landingFor, stackSize, stackTopOffset, type Pick } from './rules';

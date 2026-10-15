@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import { Link } from 'react-router';
-import { Chip } from '../components/chip';
-import { CATALOG } from '../chips/catalog';
-import { chipLabel } from '../snapshot';
-import { allSlots, slotPosition } from '../chips/lattice';
-import { parseRuns } from '../chips/notation';
+import { Chip } from './chip';
+import { CATALOG } from './chips/catalog';
+import { chipLabel } from '../../snapshot';
+import { allSlots, slotPosition } from './chips/lattice';
+import { parseRuns } from './chips/notation';
 import {
   PREVIEW_LIFT,
   STACK_CAPACITY,
@@ -15,7 +15,7 @@ import {
   nearestSlotAny,
   pickAt,
   type Pick,
-} from '../chips/rules';
+} from './chips/rules';
 import {
   clearBoard,
   coalesce,
@@ -30,11 +30,11 @@ import {
   spawnStack,
   takeFromTray,
   totalValue,
-} from '../chips/model';
-import type { Board, Catalog, Point, Run, Slot } from '../chips/types';
-import { formatChips } from '../snapshot';
-import { createPrimitiveRenderer, type PrimitiveRenderer } from '../engine/renderer';
-import { buildScene, resolveSceneColors, type Drag, type Lift } from '../chips/scene';
+} from './chips/model';
+import type { Board, Catalog, Point, Run, Slot } from './chips/types';
+import { formatChips } from '../../snapshot';
+import { createPrimitiveRenderer, type PrimitiveRenderer } from './engine/renderer';
+import { buildScene, resolveSceneColors, type Drag, type Lift } from './chips/scene';
 
 const SPAWN_THRESHOLD = 6; // pointer travel before a tray press becomes a drag
 
