@@ -8,12 +8,13 @@ import { chipLabel, formatChips } from '../../../snapshot';
 import { runsValue } from '../../chips/runs';
 import { stackSize, type Felt, type Stack } from '../felt';
 import { allSlots, slotPosition } from '../lattice';
-import { landingFor, stackTopOffset, type Landing, type Pick } from '../interaction';
+import { landingFor, stackTopOffset, type Drag, type Landing, type Lift, type Pick } from '../interaction';
 import type { Point } from '../geom';
 import { chipAngle, pushLabel, rgba, ring, shade, shadow } from './items';
 import type { SceneColors } from './colors';
 
 export type { SceneColors } from './colors';
+export type { Drag, Lift } from '../interaction';
 
 // --- scene paint constants (px / alpha) ---------------------------------------
 
@@ -58,12 +59,6 @@ const BADGE_PADDING_X = 8;
 const BADGE_HALF_HEIGHT = 9;
 const BADGE_RADIUS = 9;
 const BADGE_FILL_ALPHA = 0.9;
-
-/** The hand being dragged: which pointer holds it and the grab offset. */
-export type Drag = { pointerId: number; grabX: number; grabY: number };
-
-/** The cut-preview animation: which stack, at what depth, lifted how far. */
-export type Lift = { stackId: number; depth: number; value: number };
 
 /** Fonts the scene renders with. */
 export type SceneFonts = { chip: FontFace; badge: FontFace };

@@ -25,6 +25,12 @@ export function stackTopOffset(stack: Stack): number {
 /** A pointer hit: stack, chip depth, and whether it's the top chip. */
 export type Pick = { stackId: StackId; depth: number; isTop: boolean };
 
+/** The hand being dragged: which pointer holds it and the grab offset. */
+export type Drag = { pointerId: number; grabX: number; grabY: number };
+
+/** The cut-preview animation: which stack, at what depth, lifted how far. */
+export type Lift = { stackId: number; depth: number; value: number };
+
 /**
  * Topmost chip containing the point, so previews can't shift the target under the cursor.
  * @param felt - The felt to hit-test against.
