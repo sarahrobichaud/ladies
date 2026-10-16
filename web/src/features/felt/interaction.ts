@@ -1,7 +1,8 @@
 import { type Felt, type Stack, type StackId, stackSize } from "./felt";
 import type { Point } from "./geom";
 import { allSlots, type Slot, slotPosition } from "./lattice";
-import { CHIP_RADIUS, CHIP_SQUASH, STACK_LIFT } from "./world";
+import { BUTTON_HALF_HEIGHT, BUTTON_HALF_WIDTH, CHIP_RADIUS, CHIP_SQUASH, STACK_LIFT } from "./world";
+import { isPlaceable, resolveZones, type Zone, zoneAt } from "./zones";
 
 /** Pointer semantics against the resting felt, as pure geometry. */
 
@@ -141,38 +142,62 @@ function combineTargetAt(felt: Felt, point: Point): Stack | null {
 }
 
 /**
- * Nearest unoccupied slot, or null when the felt is full.
- * @param felt - The felt whose stacks and surface define occupancy.
+ * Nearest unoccupied slot in a zone that accepts chips, or null when every placeable slot is taken.
+ * @param felt - The felt whose zones, stacks, and surface define the candidates.
  * @param x - The pointer x in felt pixels.
  * @param y - The pointer y in felt pixels.
  */
 export function nearestFreeSlot(felt: Felt, x: number, y: number): Slot | null {
   const occupied = new Set(felt.stacks.map((s) => `${s.slot.col},${s.slot.row}`));
-  return nearestSlotWhere(felt, x, y, (slot) => !occupied.has(`${slot.col},${slot.row}`));
+  return nearestPlaceableWhere(felt, x, y, (slot) => !occupied.has(`${slot.col},${slot.row}`));
 }
 
 /**
- * Nearest slot regardless of occupancy — the felt-full fallback.
- * @param felt - The felt whose surface defines the slot set.
+ * Nearest slot in a zone that accepts chips, regardless of occupancy — the zones-full fallback.
+ * @param felt - The felt whose zones and surface define the candidates.
  * @param x - The pointer x in felt pixels.
  * @param y - The pointer y in felt pixels.
  */
-export function nearestSlotAny(felt: Felt, x: number, y: number): Slot | null {
-  return nearestSlotWhere(felt, x, y, () => true);
+export function nearestPlaceableSlot(felt: Felt, x: number, y: number): Slot | null {
+  return nearestPlaceableWhere(felt, x, y, () => true);
 }
 
 /**
- * Nearest slot passing the filter, or null.
- * @param felt - The felt whose surface defines the slot set.
+ * Zone whose slot's button face contains the point, or null.
+ * @param felt - The felt whose button zones are hit-tested.
+ * @param point - The pointer position in felt pixels.
+ */
+export function buttonZoneAt(felt: Felt, point: Point): Zone | null {
+  const zones = resolveZones(felt.layout, felt.felt);
+  for (const zone of zones) {
+    if (zone.purpose !== "button") {
+      continue;
+    }
+    for (const slot of zone.slots) {
+      const { x, y } = slotPosition(slot);
+      const halfH = BUTTON_HALF_HEIGHT * CHIP_SQUASH;
+      if (Math.abs(point.x - x) <= BUTTON_HALF_WIDTH && Math.abs(point.y - y) <= halfH) {
+        return zone;
+      }
+    }
+  }
+  return null;
+}
+
+/**
+ * Nearest placeable slot passing the filter, or null.
+ * @param felt - The felt whose zones and surface define the candidates.
  * @param x - The pointer x in felt pixels.
  * @param y - The pointer y in felt pixels.
- * @param isCandidate - Decides whether a slot may be returned.
+ * @param isCandidate - Decides whether a placeable slot may be returned.
  */
-function nearestSlotWhere(felt: Felt, x: number, y: number, isCandidate: (slot: Slot) => boolean): Slot | null {
+function nearestPlaceableWhere(felt: Felt, x: number, y: number, isCandidate: (slot: Slot) => boolean): Slot | null {
+  const zones = resolveZones(felt.layout, felt.felt);
   let best: Slot | null = null;
   let bestDistance = Infinity;
   for (const slot of allSlots(felt.felt)) {
-    if (!isCandidate(slot)) {
+    const zone = zoneAt(zones, slot);
+    if (!zone || !isPlaceable(zone.purpose) || !isCandidate(slot)) {
       continue;
     }
     const { x: sx, y: sy } = slotPosition(slot);

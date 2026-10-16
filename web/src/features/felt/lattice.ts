@@ -6,6 +6,9 @@ import { CHIP_RADIUS, SLOT_ROW_HEIGHT, SLOT_SPACING } from "./world";
 /** Address of one slot in the lattice. */
 export type Slot = { col: number; row: number };
 
+/** Count of lattice slots along each axis that fit inside the felt. */
+export type GridExtents = { cols: number; rows: number };
+
 /**
  * Pixel position of a slot's center.
  * @param slot - The slot to convert.
@@ -26,6 +29,17 @@ export function slotPosition(slot: Slot): Point {
 export function isInBounds(slot: Slot, felt: Size): boolean {
   const { x, y } = slotPosition(slot);
   return x >= CHIP_RADIUS && x <= felt.w - CHIP_RADIUS && y >= CHIP_RADIUS && y <= felt.h - CHIP_RADIUS;
+}
+
+/**
+ * Count of lattice slots along each axis that fit inside the felt.
+ * @param felt - The felt size in pixels.
+ */
+export function gridExtents(felt: Size): GridExtents {
+  return {
+    cols: Math.max(0, Math.floor((felt.w - CHIP_RADIUS) / SLOT_SPACING) + 1),
+    rows: Math.max(0, Math.floor((felt.h - CHIP_RADIUS) / SLOT_ROW_HEIGHT) + 1),
+  };
 }
 
 /**

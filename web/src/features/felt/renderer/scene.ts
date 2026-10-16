@@ -3,11 +3,12 @@
 
 import { chipLabel, formatChips } from "../../../snapshot";
 import { runsValue } from "../../chips/runs";
-import { type Felt, type Stack, stackSize } from "../felt";
+import { type Felt, feltZones, type Stack, stackSize } from "../felt";
 import type { Point } from "../geom";
 import { type Drag, type Landing, type Lift, landingFor, type Pick, stackTopOffset } from "../interaction";
 import { allSlots, slotPosition } from "../lattice";
 import { CHIP_RADIUS, CHIP_SQUASH, STACK_LIFT } from "../world";
+import type { Zone } from "../zones";
 import type { SceneColors } from "./colors";
 import { chipAngle, pushLabel, rgba, ring, shade, shadow } from "./items";
 import type { SceneItem } from "./primitives";
@@ -36,6 +37,16 @@ const HALO_GAP = 6; // px beyond the chip on all sides
 const HALO_PULSE_WOBBLE = 1.5; // px the gap breathes
 const HALO_ALPHA_MIN = 0.45;
 const HALO_ALPHA_RANGE = 0.55;
+
+// Zone paint: bet slots darken like pressed-in spots in the felt.
+const BET_SPOT_INSET = 2; // px inside the chip radius
+const BET_SPOT_ALPHA = 0.14;
+const BET_SPOT_SOFT = 2;
+
+// Button paint: an engraved spot in the felt, rimmed and labeled so it reads pressable.
+const BUTTON_SPOT_ALPHA = 0.16;
+const BUTTON_RIM_ALPHA = 0.3;
+const BUTTON_LABEL_OFFSET = 0.5; // px below button center
 
 // Contact shadows.
 const STACK_SHADOW_DROP = 1.5; // px below the stack base
@@ -94,7 +105,10 @@ export function buildScene(input: SceneInput): SceneItem[] {
   const { felt, handPos, drag, hover, lift, colors, time, fonts } = input;
   const items: SceneItem[] = [];
 
-  pushLattice(items, felt, colors);
+  const zones = feltZones(felt);
+  pushLattice(items, felt, zones, colors);
+  pushZoneMarks(items, zones);
+  pushButtons(items, zones, colors, fonts);
 
   const landing = felt.hand && handPos ? landingFor(felt, handPos) : null;
   const mergeTarget = landing?.type === "combine" ? (felt.stacks.find((s) => s.id === landing.stackId) ?? null) : null;
@@ -116,9 +130,21 @@ export function buildScene(input: SceneInput): SceneItem[] {
   return items;
 }
 
-/** Draw one dashed ring per lattice slot, squashed to match chip faces. */
-function pushLattice(items: SceneItem[], felt: Felt, colors: SceneColors) {
+/** Draw one dashed ring per standard chip slot; marked zones render their own markers instead. */
+function pushLattice(items: SceneItem[], felt: Felt, zones: Zone[], colors: SceneColors) {
+  const blocked = new Set<string>();
+  for (const zone of zones) {
+    if (zone.purpose === "stack") {
+      continue;
+    }
+    for (const slot of zone.slots) {
+      blocked.add(`${slot.col},${slot.row}`);
+    }
+  }
   for (const slot of allSlots(felt.felt)) {
+    if (blocked.has(`${slot.col},${slot.row}`)) {
+      continue;
+    }
     const { x, y } = slotPosition(slot);
     items.push(
       ring(
@@ -132,6 +158,59 @@ function pushLattice(items: SceneItem[], felt: Felt, colors: SceneColors) {
         null,
       ),
     );
+  }
+}
+
+/** Draw bet-zone slots as darkened spots pressed into the felt. */
+function pushZoneMarks(items: SceneItem[], zones: Zone[]) {
+  for (const zone of zones) {
+    if (zone.purpose !== "bet") {
+      continue;
+    }
+    for (const slot of zone.slots) {
+      const { x, y } = slotPosition(slot);
+      items.push(
+        ring(
+          x,
+          y,
+          CHIP_RADIUS - BET_SPOT_INSET,
+          (CHIP_RADIUS - BET_SPOT_INSET) * CHIP_SQUASH,
+          0,
+          [0, 0],
+          [0, 0, 0, 0],
+          [0, 0, 0, BET_SPOT_ALPHA],
+          BET_SPOT_SOFT,
+        ),
+      );
+    }
+  }
+}
+
+/** Draw one engraved, rimmed spot per button-zone slot, labeled and squashed like the lattice. */
+function pushButtons(items: SceneItem[], zones: Zone[], colors: SceneColors, fonts: SceneFonts) {
+  for (const zone of zones) {
+    if (zone.purpose !== "button") {
+      continue;
+    }
+    for (const slot of zone.slots) {
+      const { x, y } = slotPosition(slot);
+      const rx = CHIP_RADIUS - BET_SPOT_INSET;
+      const ry = rx * CHIP_SQUASH;
+      items.push(
+        ring(
+          x,
+          y,
+          rx,
+          ry,
+          1,
+          [0, 0],
+          rgba(colors.onFelt, BUTTON_RIM_ALPHA),
+          [0, 0, 0, BUTTON_SPOT_ALPHA],
+          BET_SPOT_SOFT,
+        ),
+      );
+      pushLabel(items, fonts.badge, zone.label ?? "BET", x, y + BUTTON_LABEL_OFFSET, colors.onFelt, CHIP_SQUASH);
+    }
   }
 }
 
@@ -243,6 +322,7 @@ function pushStack(items: SceneItem[], felt: Felt, stack: Stack, mergeTarget: St
       x,
       cyAt(depth) + LABEL_BASELINE_OFFSET,
       shade(palette.text, dimFactor),
+      CHIP_SQUASH,
     );
   };
 
@@ -343,6 +423,7 @@ function pushHand(items: SceneItem[], felt: Felt, handPos: Point | null, colors:
       handPos.x,
       cy + LABEL_BASELINE_OFFSET,
       palette.text,
+      CHIP_SQUASH,
     );
   }
 }

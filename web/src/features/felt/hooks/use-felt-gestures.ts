@@ -13,20 +13,23 @@ import {
   sizeHand,
   spawnStack,
   takeFromTray,
+  zoneStackValue,
 } from "../felt";
 import type { Point } from "../geom";
 import {
+  buttonZoneAt,
   type Drag,
   type Lift,
   landingFor,
   nearestFreeSlot,
-  nearestSlotAny,
+  nearestPlaceableSlot,
   type Pick,
   PREVIEW_LIFT,
   pickAt,
 } from "../interaction";
 import { type Slot, slotPosition } from "../lattice";
 import { STACK_LIFT } from "../world";
+import { resolveZones, zoneById } from "../zones";
 
 /** Pointer travel before a tray press becomes a drag, in px. */
 const SPAWN_THRESHOLD = 6;
@@ -39,7 +42,8 @@ export type FeltAction =
   | { type: "pick"; stackId: StackId; depth: number; isTop: boolean }
   | { type: "drop"; slot: Slot; combined: boolean }
   | { type: "discard" }
-  | { type: "spawn"; kind: KindId; slot: Slot };
+  | { type: "spawn"; kind: KindId; slot: Slot }
+  | { type: "bet"; zoneId: string; value: bigint };
 
 /** Pointer handlers for the felt canvas element. */
 export type CanvasHandlers = {
@@ -224,6 +228,29 @@ export function useFeltGestures({ felt, apply, canvasRef, onAction }: Options) {
   };
 
   /**
+   * Fires the bet action when a button zone's face is pressed; the consumer
+   * owns what the commit does with the staged value.
+   * @param source - the felt to read the button and bet zone from
+   * @param point - the pointer position in felt pixels
+   * @returns whether the press landed on a button
+   */
+  const pressBetButton = (source: Felt, point: Point): boolean => {
+    const button = buttonZoneAt(source, point);
+    if (!button?.commits) {
+      return false;
+    }
+    const betZone = zoneById(resolveZones(source.layout, source.felt), button.commits);
+    if (betZone?.purpose !== "bet") {
+      return false;
+    }
+    const value = zoneStackValue(source, betZone.id);
+    if (value > 0n) {
+      onActionRef.current?.({ type: "bet", zoneId: betZone.id, value });
+    }
+    return true;
+  };
+
+  /**
    * Releases a held hand: commits on the felt, discards off it.
    * @param e - up event from the capturing element
    */
@@ -241,7 +268,7 @@ export function useFeltGestures({ felt, apply, canvasRef, onAction }: Options) {
     }
     const landingAt = landingFor(feltRef.current, pos);
     const slot: Slot | null =
-      landingAt.type === "none" ? nearestSlotAny(feltRef.current, pos.x, pos.y) : landingAt.slot;
+      landingAt.type === "none" ? nearestPlaceableSlot(feltRef.current, pos.x, pos.y) : landingAt.slot;
     if (!slot) {
       return;
     }
@@ -293,6 +320,9 @@ export function useFeltGestures({ felt, apply, canvasRef, onAction }: Options) {
       return;
     }
     const point = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    if (pressBetButton(feltRef.current, point)) {
+      return;
+    }
     const pick = pickAt(feltRef.current, point);
     if (!pick) {
       return;

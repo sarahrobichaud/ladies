@@ -37,3 +37,9 @@ export const SLOT_SPACING = CHIP_DIAMETER + SLOT_GAP;
 
 /** Row height of the staggered lattice: spacing × √3/2, snapped to the pixel grid. */
 export const SLOT_ROW_HEIGHT = Math.round(SLOT_SPACING * (Math.sqrt(3) / 2));
+
+/** Button slot half-width in px; buttons live on lattice slots but needn't be chip-shaped. */
+export const BUTTON_HALF_WIDTH = 26;
+
+/** Button slot half-height in px before the oblique squash. */
+export const BUTTON_HALF_HEIGHT = 15;

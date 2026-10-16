@@ -1,18 +1,40 @@
 import { useRef, useState } from "react";
 import { Link } from "react-router";
-import { chipLabel, formatChips } from "../snapshot";
 import { CATALOG } from "../features/chips/catalog";
 import { Chip } from "../features/chips/chip";
 import { parseRuns } from "../features/chips/notation";
 import { coalesce } from "../features/chips/runs";
 import type { Catalog, Run } from "../features/chips/types";
 import { ChipTray } from "../features/felt/components/chip-tray";
-import { clearBoard, STACK_CAPACITY, spawnStack, totalValue } from "../features/felt/felt";
 import { FeltCanvas } from "../features/felt/components/felt-canvas";
+import {
+  clearBoard,
+  clearZone,
+  STACK_CAPACITY,
+  setLayout as setFeltLayout,
+  spawnStack,
+  totalValue,
+} from "../features/felt/felt";
 import { useFelt } from "../features/felt/hooks/use-felt";
-import { useFeltGestures } from "../features/felt/hooks/use-felt-gestures";
+import { type FeltAction, useFeltGestures } from "../features/felt/hooks/use-felt-gestures";
 import { nearestFreeSlot } from "../features/felt/interaction";
 import { allSlots } from "../features/felt/lattice";
+import { FREE_LAYOUT, type ZoneSpec } from "../features/felt/zones";
+import { chipLabel, formatChips } from "../snapshot";
+
+// Poker layout: the whole lattice accepts stacks, with a staged bet zone near
+// the top edge and its commit button one slot further along the same row.
+const POKER_LAYOUT: readonly ZoneSpec[] = [
+  { id: "free", purpose: "stack", slots: "all" },
+  { id: "bet-0", purpose: "bet", slots: { cols: { from: 4, to: -4 }, rows: { from: 1, to: 2 } } },
+  {
+    id: "bet-button-0",
+    purpose: "button",
+    slots: { cols: { from: -3, to: -3 }, rows: { from: 2, to: 2 } },
+    label: "BET",
+    commits: "bet-0",
+  },
+];
 
 // A random canonical stack: 1..STACK_CAPACITY chips split into runs of
 // random denominations. coalesce merges adjacent same-kind runs.
@@ -31,10 +53,24 @@ function randomRuns(catalog: Catalog): Run[] {
 
 export function ChipLabPage() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const { felt, apply } = useFelt(CATALOG);
-  const gestures = useFeltGestures({ felt, apply, canvasRef });
+  const { felt, apply } = useFelt(CATALOG, POKER_LAYOUT);
+  const [layoutName, setLayoutName] = useState<"free" | "poker">("poker");
+  const [lastAction, setLastAction] = useState<string | null>(null);
+  const onAction = (action: FeltAction) => {
+    if (action.type === "bet") {
+      setLastAction(`Bet ${formatChips(action.value)} committed from ${action.zoneId}`);
+      apply((f) => clearZone(f, action.zoneId));
+    }
+  };
+  const gestures = useFeltGestures({ felt, apply, canvasRef, onAction });
   const [notation, setNotation] = useState("");
   const [notationError, setNotationError] = useState<string | null>(null);
+
+  const toggleLayout = () => {
+    const next = layoutName === "free" ? POKER_LAYOUT : FREE_LAYOUT;
+    setLayoutName(layoutName === "free" ? "poker" : "free");
+    apply((f) => setFeltLayout(f, next));
+  };
 
   const total = totalValue(felt);
 
@@ -80,6 +116,14 @@ export function ChipLabPage() {
           <p className="text-sm text-muted">On the table: {formatChips(total)}</p>
         </div>
         <div className="flex items-center gap-3">
+          {lastAction && <p className="text-xs text-blue-strong">{lastAction}</p>}
+          <button
+            type="button"
+            className="rounded-md border border-line bg-raised px-3 py-1.5 text-sm text-ink hover:bg-blue-tint"
+            onClick={toggleLayout}
+          >
+            {layoutName === "free" ? "Poker layout" : "Free layout"}
+          </button>
           <form
             className="flex items-center gap-1.5"
             onSubmit={(e) => {

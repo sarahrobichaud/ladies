@@ -2,10 +2,12 @@ import { coalesce, materialize, runsFromChips, runsSize, runsValue, splitRuns } 
 import type { Catalog, Chip, KindId, Run } from "../chips/types";
 import type { Size } from "./geom";
 import type { Slot } from "./lattice";
+import { FREE_LAYOUT, isPlaceable, resolveZones, type Zone, type ZoneSpec, zoneAt, zoneById } from "./zones";
 
 /**
  * Felt state and pure Felt → Felt ops that keep the invariants
- * (one hand, one stack per slot, canonical runs, non-empty stacks);
+ * (one hand, one stack per slot, canonical runs, non-empty stacks,
+ * stacks only in zones that accept chips);
  * rejected moves return the felt unchanged.
  */
 
@@ -21,10 +23,12 @@ export type Stack = { id: StackId; slot: Slot; runs: Run[] };
 /** The chips currently being dragged, plus the stack they came from (null for tray spawns). */
 export type Hand = { chips: Chip[]; origin: StackId | null };
 
-/** The whole felt state: felt size, resting stacks, and the optional hand. */
+/** The whole felt state: felt size, zone layout, resting stacks, and the optional hand. */
 export type Felt = {
   catalog: Catalog;
   felt: Size;
+  /** Declarative zone layout; resolved against felt size wherever slots are judged. */
+  layout: readonly ZoneSpec[];
   stacks: Stack[];
   hand: Hand | null;
   nextChipId: number;
@@ -40,12 +44,68 @@ export function stackSize(stack: Stack): number {
 }
 
 /**
- * An empty felt of the given size.
+ * An empty felt of the given size and zone layout.
  * @param catalog - The chip catalog for value lookups.
  * @param felt - The felt size in pixels.
+ * @param layout - The zone layout; defaults to one stack zone covering everything.
  */
-export function createBoard(catalog: Catalog, felt: Size): Felt {
-  return { catalog, felt, stacks: [], hand: null, nextChipId: 1, nextStackId: 1 };
+export function createBoard(catalog: Catalog, felt: Size, layout: readonly ZoneSpec[] = FREE_LAYOUT): Felt {
+  return { layout, catalog, felt, stacks: [], hand: null, nextChipId: 1, nextStackId: 1 };
+}
+
+/**
+ * Resolves the felt's layout into concrete zones.
+ * @param felt - The felt whose layout and size to resolve.
+ */
+export function feltZones(felt: Felt): Zone[] {
+  return resolveZones(felt.layout, felt.felt);
+}
+
+/**
+ * Swaps the zone layout, keeping stacks, hand, and ids.
+ * @param felt - The felt to update.
+ * @param layout - The new zone layout.
+ */
+export function setLayout(felt: Felt, layout: readonly ZoneSpec[]): Felt {
+  return { ...felt, layout };
+}
+
+/**
+ * Total resting value of the stacks inside a zone.
+ * @param felt - The felt to query.
+ * @param zoneId - The zone whose stacks to value.
+ */
+export function zoneStackValue(felt: Felt, zoneId: string): bigint {
+  const zone = zoneById(feltZones(felt), zoneId);
+  if (!zone) {
+    return 0n;
+  }
+  const slots = new Set(zone.slots.map((s) => slotKey(s)));
+  return felt.stacks
+    .filter((s) => slots.has(slotKey(s.slot)))
+    .reduce((sum, s) => sum + runsValue(s.runs, felt.catalog), 0n);
+}
+
+/**
+ * Removes every stack resting inside a zone; the hand is kept.
+ * @param felt - The felt to update.
+ * @param zoneId - The zone to clear.
+ */
+export function clearZone(felt: Felt, zoneId: string): Felt {
+  const zone = zoneById(feltZones(felt), zoneId);
+  if (!zone) {
+    return felt;
+  }
+  const slots = new Set(zone.slots.map((s) => slotKey(s)));
+  return { ...felt, stacks: felt.stacks.filter((s) => !slots.has(slotKey(s.slot))) };
+}
+
+/**
+ * Stable string key for a slot address.
+ * @param slot - The slot to key.
+ */
+function slotKey(slot: Slot): string {
+  return `${slot.col},${slot.row}`;
 }
 
 /**
@@ -92,6 +152,10 @@ function findStack(felt: Felt, id: StackId): Stack | undefined {
 export function placeRuns(felt: Felt, runs: Run[], slot: Slot): Felt {
   const canonical = coalesce(runs);
   if (canonical.length === 0) {
+    return felt;
+  }
+  const zone = zoneAt(feltZones(felt), slot);
+  if (!zone || !isPlaceable(zone.purpose)) {
     return felt;
   }
   const occupant = felt.stacks.find((s) => sameSlot(s.slot, slot));

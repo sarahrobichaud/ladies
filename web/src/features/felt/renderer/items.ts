@@ -62,19 +62,32 @@ export function shadow(x: number, y: number, spread: number, alpha: number, soft
 }
 
 /**
- * Append centered text glyphs to the scene.
+ * Append centered text glyphs to the scene, optionally squashed flat onto the felt plane.
  * @param items - scene list to append to
  * @param font - font face to lay the text out with
  * @param text - text to render
  * @param cx - center x in px
  * @param cy - middle-baseline y in px
  * @param color - text color
+ * @param squash - vertical squash around the baseline; 1 keeps screen-space text upright
  */
-export function pushLabel(items: SceneItem[], font: FontFace, text: string, cx: number, cy: number, color: RGB) {
+export function pushLabel(
+  items: SceneItem[],
+  font: FontFace,
+  text: string,
+  cx: number,
+  cy: number,
+  color: RGB,
+  squash = 1,
+) {
   const width = font.width(text);
   const left = cx - width / 2;
   for (const glyph of font.glyphs(text, left, cy, color)) {
-    items.push(glyph);
+    items.push({
+      ...glyph,
+      y: cy + (glyph.y - cy) * squash,
+      h: glyph.h * squash,
+    });
   }
 }
 
