@@ -3,8 +3,8 @@ import type { RefObject } from 'react';
 import { resolveSceneColors, type SceneColors } from '../renderer/colors';
 
 /**
- * Keeps the theme-resolved scene colors in a ref, re-resolving when the
- * document element's attributes change (theme/font switches).
+ * Keeps the theme-resolved scene colors in a ref, re-resolving on theme
+ * changes.
  * @returns a ref with the latest resolved scene colors
  */
 export function useSceneColors(): RefObject<SceneColors> {

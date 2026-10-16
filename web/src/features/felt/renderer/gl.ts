@@ -28,7 +28,9 @@ export function createGL(canvas: HTMLCanvasElement): WebGL2RenderingContext | nu
  */
 function compile(gl: WebGL2RenderingContext, type: number, source: string): WebGLShader {
   const shader = gl.createShader(type);
-  if (!shader) throw new Error('webgl: shader allocation failed');
+  if (!shader) {
+    throw new Error('webgl: shader allocation failed');
+  }
 
   gl.shaderSource(shader, source);
   gl.compileShader(shader);
@@ -52,7 +54,9 @@ function compile(gl: WebGL2RenderingContext, type: number, source: string): WebG
  */
 export function createProgram(gl: WebGL2RenderingContext, vs: string, fs: string): WebGLProgram {
   const program = gl.createProgram();
-  if (!program) throw new Error('webgl: program allocation failed');
+  if (!program) {
+    throw new Error('webgl: program allocation failed');
+  }
 
   const vertex = compile(gl, gl.VERTEX_SHADER, vs);
   const fragment = compile(gl, gl.FRAGMENT_SHADER, fs);
@@ -97,10 +101,14 @@ export function createQuadVAO(
   attrs: InstanceAttr[],
 ): WebGLVertexArrayObject {
   const vao = gl.createVertexArray();
-  if (!vao) throw new Error('webgl: VAO allocation failed');
+  if (!vao) {
+    throw new Error('webgl: VAO allocation failed');
+  }
 
   const quad = gl.createBuffer();
-  if (!quad) throw new Error('webgl: buffer allocation failed');
+  if (!quad) {
+    throw new Error('webgl: buffer allocation failed');
+  }
 
   gl.bindVertexArray(vao);
 
@@ -161,7 +169,9 @@ export class Batch {
     this.instanceFloats = attrs.reduce((n, a) => n + a.size, 0);
 
     const buffer = gl.createBuffer();
-    if (!buffer) throw new Error('webgl: buffer allocation failed');
+    if (!buffer) {
+      throw new Error('webgl: buffer allocation failed');
+    }
     this.buffer = buffer;
 
     this.vao = createQuadVAO(gl, program, buffer, attrs);
@@ -173,7 +183,9 @@ export class Batch {
    * @param floats - required capacity in floats
    */
   private reserve(floats: number) {
-    if (floats <= this.capacity) return;
+    if (floats <= this.capacity) {
+      return;
+    }
 
     const capacity = Math.max(floats, this.capacity * 2, 256);
     this.gl.bindBuffer(this.gl.ARRAY_BUFFER, this.buffer);
@@ -188,7 +200,9 @@ export class Batch {
    * @param instances - instance count for the draw
    */
   draw(data: Float32Array, floats: number, instances: number) {
-    if (instances === 0) return;
+    if (instances === 0) {
+      return;
+    }
 
     this.reserve(floats);
 

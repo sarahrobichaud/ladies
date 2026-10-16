@@ -34,11 +34,15 @@ function initWorldUniforms(gl: WebGL2RenderingContext, program: WebGLProgram) {
 
   const scalar = (name: string, value: number) => {
     const loc = gl.getUniformLocation(program, name);
-    if (loc) gl.uniform1f(loc, value);
+    if (loc) {
+      gl.uniform1f(loc, value);
+    }
   };
   const pair = (name: string, x: number, y: number) => {
     const loc = gl.getUniformLocation(program, name);
-    if (loc) gl.uniform2f(loc, x, y);
+    if (loc) {
+      gl.uniform2f(loc, x, y);
+    }
   };
 
   scalar('uChipRadius', CHIP_RADIUS);
@@ -125,7 +129,9 @@ class Renderer {
    * @param cssHeight - viewport height in CSS px
    */
   render(scene: SceneItem[], cssWidth: number, cssHeight: number) {
-    if (cssWidth <= 0 || cssHeight <= 0) return;
+    if (cssWidth <= 0 || cssHeight <= 0) {
+      return;
+    }
 
     const gl = this.gl;
     this.cssW = cssWidth;
@@ -170,7 +176,9 @@ class Renderer {
    * @param floats - required capacity in floats
    */
   private ensure(kind: Kind, floats: number) {
-    if (this.scratch[kind].length >= floats) return;
+    if (this.scratch[kind].length >= floats) {
+      return;
+    }
 
     const cap = Math.max(this.scratch[kind].length * 2, SCRATCH_INSTANCES, floats);
     this.scratch[kind] = new Float32Array(cap);
@@ -183,13 +191,17 @@ class Renderer {
    * @param floats - packed float count in the run's scratch prefix
    */
   private flush(kind: Kind, count: number, floats: number) {
-    if (count === 0) return;
+    if (count === 0) {
+      return;
+    }
 
     const gl = this.gl;
     const pass = this.passes[kind];
 
     gl.useProgram(pass.program);
-    if (pass.uResolution) gl.uniform2f(pass.uResolution, this.cssW, this.cssH);
+    if (pass.uResolution) {
+      gl.uniform2f(pass.uResolution, this.cssW, this.cssH);
+    }
 
     if (kind === 'glyph') {
       gl.activeTexture(gl.TEXTURE0);
@@ -214,7 +226,9 @@ export interface PrimitiveRenderer {
  */
 export function createPrimitiveRenderer(canvas: HTMLCanvasElement): PrimitiveRenderer | null {
   const gl = createGL(canvas);
-  if (!gl) return null;
+  if (!gl) {
+    return null;
+  }
 
   const renderer = new Renderer(gl, canvas);
   return {

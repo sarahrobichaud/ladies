@@ -42,7 +42,9 @@ export function FeltCanvas({ felt, apply, canvasRef, gestures, className, emptyL
   // Renderer lifecycle: created once per canvas, disposed on unmount.
   useEffect(() => {
     const el = canvasRef.current;
-    if (!el) return;
+    if (!el) {
+      return;
+    }
     let renderer: PrimitiveRenderer | null = null;
     try {
       renderer = createPrimitiveRenderer(el);
@@ -60,7 +62,9 @@ export function FeltCanvas({ felt, apply, canvasRef, gestures, className, emptyL
     onResize: (size) => apply((f) => resizeFelt(f, size)),
     draw: (time, dpr) => {
       const renderer = rendererRef.current;
-      if (!renderer) return;
+      if (!renderer) {
+        return;
+      }
       const scene = sceneRef.current;
       const colors = colorsRef.current;
       const lift = gestures.stepLift(scene.hover);

@@ -82,10 +82,8 @@ function rectContains(rect: DOMRect, x: number, y: number): boolean {
 }
 
 /**
- * The felt's pointer state machine: drag, tray-spawn, hover, and the
- * cut-preview lift animation. Translates raw pointer gestures into felt
- * model ops and semantic FeltActions — the actions-out surface for a felt
- * canvas.
+ * The felt's pointer state machine, translating raw pointer gestures into
+ * felt model ops and semantic FeltActions.
  * @param options - felt state, op dispatcher, canvas ref, and action sink
  * @returns gesture state, handler bundles, the lift animation stepper, and reset
  */
@@ -115,9 +113,13 @@ export function useFeltGestures({ felt, apply, canvasRef, onAction }: Options) {
   // the model op.
   useEffect(() => {
     const el = canvasRef.current;
-    if (!el) return;
+    if (!el) {
+      return;
+    }
     const onWheel = (e: WheelEvent) => {
-      if (!dragRef.current || e.deltaY === 0) return;
+      if (!dragRef.current || e.deltaY === 0) {
+        return;
+      }
       e.preventDefault();
       apply((f) => sizeHand(f, e.deltaY < 0 ? 1 : -1));
     };
@@ -140,15 +142,16 @@ export function useFeltGestures({ felt, apply, canvasRef, onAction }: Options) {
       ls.value += (PREVIEW_LIFT - ls.value) * 0.25;
     } else if (ls) {
       ls.value *= 0.7;
-      if (ls.value < 0.5) ls = null;
+      if (ls.value < 0.5) {
+        ls = null;
+      }
     }
     liftRef.current = ls;
     return ls;
   };
 
   /**
-   * Ends the active gesture without touching felt state; the hand stays
-   * where it was.
+   * Ends the active gesture, leaving felt state and hand position untouched.
    */
   const cancelGesture = () => {
     setDrag(null);
@@ -171,7 +174,9 @@ export function useFeltGestures({ felt, apply, canvasRef, onAction }: Options) {
    */
   const dragHand = (e: ReactPointerEvent<Element>, d: Drag) => {
     const rect = canvasRect();
-    if (!rect) return;
+    if (!rect) {
+      return;
+    }
     setHandPos({ x: e.clientX - rect.left - d.grabX, y: e.clientY - rect.top - d.grabY });
     setHover(null);
   };
@@ -182,9 +187,13 @@ export function useFeltGestures({ felt, apply, canvasRef, onAction }: Options) {
    * @param s - the tray press being promoted
    */
   const promoteSpawn = (e: ReactPointerEvent<Element>, s: Spawn) => {
-    if (Math.hypot(e.clientX - s.startX, e.clientY - s.startY) < SPAWN_THRESHOLD) return;
+    if (Math.hypot(e.clientX - s.startX, e.clientY - s.startY) < SPAWN_THRESHOLD) {
+      return;
+    }
     const rect = canvasRect();
-    if (!rect) return;
+    if (!rect) {
+      return;
+    }
     apply((f) => takeFromTray(f, s.kind));
     setSpawn(null);
     setHandPos({ x: e.clientX - rect.left, y: e.clientY - rect.top });
@@ -198,18 +207,24 @@ export function useFeltGestures({ felt, apply, canvasRef, onAction }: Options) {
    */
   const trackHover = (e: ReactPointerEvent<Element>) => {
     const rect = canvasRect();
-    if (!rect) return;
+    if (!rect) {
+      return;
+    }
     setHover(pickAt(feltRef.current, { x: e.clientX - rect.left, y: e.clientY - rect.top }));
   };
 
-  // Shared by the canvas and the tray chips — whoever holds pointer capture
+  // Shared by the canvas and the tray chips: whoever holds pointer capture
   // receives the moves.
   const onPointerMove = (e: ReactPointerEvent<Element>) => {
     const d = dragRef.current;
-    if (d && d.pointerId === e.pointerId) return dragHand(e, d);
     const s = spawnRef.current;
-    if (s && s.pointerId === e.pointerId) return promoteSpawn(e, s);
-    trackHover(e);
+    if (d && d.pointerId === e.pointerId) {
+      dragHand(e, d);
+    } else if (s && s.pointerId === e.pointerId) {
+      promoteSpawn(e, s);
+    } else {
+      trackHover(e);
+    }
   };
 
   /**
@@ -219,7 +234,9 @@ export function useFeltGestures({ felt, apply, canvasRef, onAction }: Options) {
   const releaseDrag = (e: ReactPointerEvent<Element>) => {
     const rect = canvasRect();
     const pos = handPosRef.current;
-    if (!rect || !pos) return;
+    if (!rect || !pos) {
+      return;
+    }
     if (!rectContains(rect, e.clientX, e.clientY)) {
       apply(discardHand);
       setHandPos(null);
@@ -229,7 +246,9 @@ export function useFeltGestures({ felt, apply, canvasRef, onAction }: Options) {
     const landingAt = landingFor(feltRef.current, pos);
     const slot: Slot | null =
       landingAt.type === 'none' ? nearestSlotAny(feltRef.current, pos.x, pos.y) : landingAt.slot;
-    if (!slot) return;
+    if (!slot) {
+      return;
+    }
     apply((f) => commitHand(f, slot));
     setHandPos(null);
     onActionRef.current?.({ type: 'drop', slot, combined: landingAt.type === 'combine' });
@@ -242,22 +261,24 @@ export function useFeltGestures({ felt, apply, canvasRef, onAction }: Options) {
    */
   const releaseSpawn = (s: Spawn) => {
     const rect = canvasRect();
-    if (!rect) return;
+    if (!rect) {
+      return;
+    }
     const slot = nearestFreeSlot(feltRef.current, rect.width / 2, rect.height / 2);
-    if (!slot) return;
+    if (!slot) {
+      return;
+    }
     apply((f) => spawnStack(f, [{ kind: s.kind, count: 1 }], slot));
     onActionRef.current?.({ type: 'spawn', kind: s.kind, slot });
   };
 
   const onPointerUp = (e: ReactPointerEvent<Element>) => {
     const d = dragRef.current;
+    const s = spawnRef.current;
     if (d && d.pointerId === e.pointerId) {
       setDrag(null);
       releaseDrag(e);
-      return;
-    }
-    const s = spawnRef.current;
-    if (s && s.pointerId === e.pointerId) {
+    } else if (s && s.pointerId === e.pointerId) {
       setSpawn(null);
       releaseSpawn(s);
     }
@@ -272,12 +293,18 @@ export function useFeltGestures({ felt, apply, canvasRef, onAction }: Options) {
     e.preventDefault();
     canvasRef.current?.setPointerCapture(e.pointerId);
     const rect = canvasRect();
-    if (!rect) return;
+    if (!rect) {
+      return;
+    }
     const point = { x: e.clientX - rect.left, y: e.clientY - rect.top };
     const pick = pickAt(feltRef.current, point);
-    if (!pick) return;
+    if (!pick) {
+      return;
+    }
     const stack = feltRef.current.stacks.find((s) => s.id === pick.stackId);
-    if (!stack) return;
+    if (!stack) {
+      return;
+    }
     const { x: sx, y: sy } = slotPosition(stack.slot);
     const lift = liftRef.current;
     const previewLift = lift && lift.stackId === pick.stackId ? lift.value : 0;
@@ -289,7 +316,9 @@ export function useFeltGestures({ felt, apply, canvasRef, onAction }: Options) {
         : pick.isTop
           ? pickTop(source, stack.id)
           : pickFrom(source, stack.id, pick.depth);
-    if (next === source) return;
+    if (next === source) {
+      return;
+    }
     apply(() => next);
     setHover(null);
     setHandPos(visual);

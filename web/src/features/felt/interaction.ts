@@ -39,12 +39,18 @@ export type Lift = { stackId: number; depth: number; value: number };
 export function pickAt(felt: Felt, point: Point): Pick | null {
   for (const stack of felt.stacks) {
     const { x: sx, y: sy } = slotPosition(stack.slot);
-    if (Math.abs(sx - point.x) > CHIP_RADIUS) continue;
+    if (Math.abs(sx - point.x) > CHIP_RADIUS) {
+      continue;
+    }
 
     const size = stackSize(stack);
     const topOffset = stackTopOffset(stack);
-    if (point.y < sy - topOffset - CHIP_RADIUS * CHIP_SQUASH) continue;
-    if (point.y > sy + CHIP_RADIUS * CHIP_SQUASH + STACK_LIFT) continue;
+    if (point.y < sy - topOffset - CHIP_RADIUS * CHIP_SQUASH) {
+      continue;
+    }
+    if (point.y > sy + CHIP_RADIUS * CHIP_SQUASH + STACK_LIFT) {
+      continue;
+    }
 
     for (let depth = size - 1; depth >= 0; depth--) {
       const chipY = sy - depth * STACK_LIFT;
@@ -83,7 +89,9 @@ export type Landing =
  */
 export function landingFor(felt: Felt, point: Point): Landing {
   const hand = felt.hand;
-  if (!hand || hand.chips.length === 0) return { type: 'none' };
+  if (!hand || hand.chips.length === 0) {
+    return { type: 'none' };
+  }
 
   const target = combineTargetAt(felt, point);
   if (target) {
@@ -97,7 +105,9 @@ export function landingFor(felt: Felt, point: Point): Landing {
   }
 
   const slot = nearestFreeSlot(felt, point.x, point.y);
-  if (slot) return { type: 'place', slot, ring: slotPosition(slot) };
+  if (slot) {
+    return { type: 'place', slot, ring: slotPosition(slot) };
+  }
   return { type: 'none' };
 }
 
@@ -112,10 +122,14 @@ function combineTargetAt(felt: Felt, point: Point): Stack | null {
   for (const stack of felt.stacks) {
     const { x: sx, y: sy } = slotPosition(stack.slot);
     const topY = sy - stackTopOffset(stack);
-    if (point.y < topY - COMBINE_BAND || point.y > topY + 4) continue;
+    if (point.y < topY - COMBINE_BAND || point.y > topY + 4) {
+      continue;
+    }
 
     const dx = Math.abs(sx - point.x);
-    if (dx > COMBINE_HALF_WIDTH) continue;
+    if (dx > COMBINE_HALF_WIDTH) {
+      continue;
+    }
 
     const distance = dx + Math.abs(topY - point.y);
     if (distance < bestDistance) {
@@ -163,7 +177,9 @@ function nearestSlotWhere(
   let best: Slot | null = null;
   let bestDistance = Infinity;
   for (const slot of allSlots(felt.felt)) {
-    if (!isCandidate(slot)) continue;
+    if (!isCandidate(slot)) {
+      continue;
+    }
     const { x: sx, y: sy } = slotPosition(slot);
     const distance = (sx - x) ** 2 + (sy - y) ** 2;
     if (distance < bestDistance) {

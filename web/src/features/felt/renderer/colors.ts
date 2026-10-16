@@ -57,7 +57,10 @@ function parseColor(color: string): RGB {
   colorProbe.style.color = color.trim();
 
   const match = colorProbe.style.color.match(/rgba?\(([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/);
-  if (!match) return [0, 1, 1]; // loud fallback: unparseable tokens should be visible
+  if (!match) {
+    // loud fallback: unparseable tokens should be visible
+    return [0, 1, 1];
+  }
 
   return [Number(match[1]) / 255, Number(match[2]) / 255, Number(match[3]) / 255];
 }

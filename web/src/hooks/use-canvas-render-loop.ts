@@ -15,9 +15,7 @@ type Options = {
 
 /**
  * Canvas plumbing for a render loop: DPR-aware bitmap sizing and a
- * requestAnimationFrame loop. Options are read through a ref, so the loop
- * and the resize observer always see the latest committed callbacks without
- * being torn down.
+ * requestAnimationFrame loop.
  * @param canvasRef - ref to the canvas element
  * @param options - resize callback and per-frame draw callback
  */
@@ -31,7 +29,9 @@ export function useCanvasRenderLoop(
   // Size → canvas bitmap (DPR-aware).
   useEffect(() => {
     const el = canvasRef.current;
-    if (!el) return;
+    if (!el) {
+      return;
+    }
     const observer = new ResizeObserver(([entry]) => {
       const size = { w: entry.contentRect.width, h: entry.contentRect.height };
       const dpr = window.devicePixelRatio || 1;

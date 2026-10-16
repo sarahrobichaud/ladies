@@ -103,7 +103,9 @@ export function buildScene(input: SceneInput): SceneItem[] {
       : null;
 
   pushLandingGhost(items, landing, colors);
-  if (mergeTarget) pushMergeHalo(items, mergeTarget, colors, time);
+  if (mergeTarget) {
+    pushMergeHalo(items, mergeTarget, colors, time);
+  }
 
   const stacks = stacksBackToFront(felt);
   pushStackShadows(items, stacks);
@@ -138,7 +140,9 @@ function pushLattice(items: SceneItem[], felt: Felt, colors: SceneColors) {
 
 /** Draw the landing ghost where the hand's bottom chip would sit. */
 function pushLandingGhost(items: SceneItem[], landing: Landing | null, colors: SceneColors) {
-  if (!landing || landing.type === 'none') return;
+  if (!landing || landing.type === 'none') {
+    return;
+  }
 
   const isCombine = landing.type === 'combine';
   items.push(
@@ -263,7 +267,9 @@ function pushStack(
   } else {
     // Cut stack: lower half, ghost ellipse at the cut plane, lifted upper half.
     for (let depth = 0; depth < cut; depth++) pushWall(depth);
-    if (cut > 0) pushFace(cut - 1);
+    if (cut > 0) {
+      pushFace(cut - 1);
+    }
     items.push(
       ring(x, y - cut * STACK_LIFT, CHIP_RADIUS, CHIP_RADIUS * CHIP_SQUASH, GHOST_RING_WIDTH, GHOST_RING_DASH, rgba(colors.orange, 1), null),
     );
@@ -289,7 +295,9 @@ function pushHand(
   colors: SceneColors,
   fonts: SceneFonts,
 ) {
-  if (!felt.hand || !handPos) return;
+  if (!felt.hand || !handPos) {
+    return;
+  }
 
   // Held above the table: a softer, wider shadow offset further down.
   items.push(shadow(handPos.x, handPos.y + STACK_LIFT + HAND_SHADOW_DROP, HAND_SHADOW_SPREAD, HAND_SHADOW_ALPHA, HAND_SHADOW_SOFT));
@@ -344,10 +352,14 @@ function pushHoverBadge(
   colors: SceneColors,
   fonts: SceneFonts,
 ) {
-  if (!hover || drag) return;
+  if (!hover || drag) {
+    return;
+  }
 
   const stack = felt.stacks.find((s) => s.id === hover.stackId);
-  if (!stack) return;
+  if (!stack) {
+    return;
+  }
 
   const { x, y } = slotPosition(stack.slot);
   const badgeY = Math.max(BADGE_MIN_Y, y - stackTopOffset(stack) - BADGE_LIFT - BADGE_CLEARANCE);

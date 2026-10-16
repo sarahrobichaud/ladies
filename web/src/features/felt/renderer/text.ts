@@ -49,10 +49,14 @@ export class GlyphAtlas {
     this.canvas = document.createElement('canvas');
     this.canvas.width = this.canvas.height = ATLAS_SIZE;
     const ctx = this.canvas.getContext('2d');
-    if (!ctx) throw new Error('atlas: 2d context unavailable');
+    if (!ctx) {
+      throw new Error('atlas: 2d context unavailable');
+    }
     this.ctx = ctx;
     const texture = gl.createTexture();
-    if (!texture) throw new Error('atlas: texture allocation failed');
+    if (!texture) {
+      throw new Error('atlas: texture allocation failed');
+    }
     this.texture = texture;
     gl.bindTexture(gl.TEXTURE_2D, texture);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
@@ -106,7 +110,9 @@ export class GlyphAtlas {
 
   // Upload the atlas canvas when it changed. Call once per frame.
   upload() {
-    if (!this.dirty) return;
+    if (!this.dirty) {
+      return;
+    }
     const gl = this.gl;
     gl.bindTexture(gl.TEXTURE_2D, this.texture);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, this.canvas);
@@ -120,7 +126,9 @@ export class GlyphAtlas {
   private glyph(px: number, ch: string, scale: number): Glyph {
     const key = `${px}\u0000${scale}\u0000${ch}`;
     const cached = this.entries.get(key);
-    if (cached) return cached;
+    if (cached) {
+      return cached;
+    }
 
     // Measure first so placement knows the quad size.
     this.setTextState(Math.max(1, Math.round(px * scale)));
@@ -137,7 +145,9 @@ export class GlyphAtlas {
           this.penY += this.rowH + 1;
           this.rowH = 0;
         }
-        if (this.penY + qh <= this.size && qw <= this.size && qh <= this.size) break;
+        if (this.penY + qh <= this.size && qw <= this.size && qh <= this.size) {
+          break;
+        }
         this.grow(this.size * 2);
       }
     }

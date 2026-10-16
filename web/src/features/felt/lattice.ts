@@ -42,7 +42,9 @@ export function allSlots(felt: Size): Slot[] {
   for (let row = 0; row * SLOT_ROW_HEIGHT <= felt.h; row++) {
     for (let col = 0; col * SLOT_SPACING <= felt.w + SLOT_SPACING / 2; col++) {
       const slot = { col, row };
-      if (isInBounds(slot, felt)) slots.push(slot);
+      if (isInBounds(slot, felt)) {
+        slots.push(slot);
+      }
     }
   }
   return slots;
