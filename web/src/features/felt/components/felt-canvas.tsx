@@ -1,12 +1,12 @@
 import type { RefObject } from "react";
 import { useEffect, useRef } from "react";
-import { useCanvasRenderLoop } from "../../hooks/use-canvas-render-loop";
-import { useLatestRef } from "../../hooks/use-latest-ref";
-import { type Felt, setFelt as resizeFelt } from "./felt";
-import type { FeltGestures } from "./hooks/use-felt-gestures";
-import { useSceneColors } from "./hooks/use-scene-colors";
-import { createPrimitiveRenderer, type PrimitiveRenderer } from "./renderer/renderer";
-import { buildScene } from "./renderer/scene";
+import { useCanvasRenderLoop } from "../../../hooks/use-canvas-render-loop";
+import { useLatestRef } from "../../../hooks/use-latest-ref";
+import { type Felt, setFelt as resizeFelt } from "../felt";
+import type { FeltGestures } from "../hooks/use-felt-gestures";
+import { useSceneColors } from "../hooks/use-scene-colors";
+import { createPrimitiveRenderer, type PrimitiveRenderer } from "../renderer/renderer";
+import { buildScene } from "../renderer/scene";
 
 type FeltCanvasProps = {
   felt: Felt;

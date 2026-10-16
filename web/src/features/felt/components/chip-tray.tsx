@@ -1,6 +1,6 @@
-import { Chip } from "../chips/chip";
-import type { Catalog, KindId } from "../chips/types";
-import type { TrayHandlers } from "./hooks/use-felt-gestures";
+import { Chip } from "../../chips/chip";
+import type { Catalog, KindId } from "../../chips/types";
+import type { TrayHandlers } from "../hooks/use-felt-gestures";
 
 type ChipTrayProps = {
   catalog: Catalog;
