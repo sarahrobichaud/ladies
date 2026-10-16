@@ -34,6 +34,10 @@
               rust
               pkgs.gcc
 
+              # node tooling
+              pkgs.nodejs
+              pkgs.pnpm
+
               # wasm tooling
               pkgs.wasm-pack
               pkgs.wasm-bindgen-cli

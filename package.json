@@ -6,7 +6,16 @@
   "scripts": {
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
-    "format": "biome format --write"
+    "format": "biome format --write",
+    "rust:fmt": "cargo fmt --all",
+    "rust:lint": "RUSTFLAGS=\"-D warnings\" cargo clippy --locked --all-targets --all-features --workspace",
+    "rust:test": "cargo test --locked --workspace --all-features",
+    "rust:tui": "cargo run -p ladies-tui",
+    "web:dev": "pnpm -C web run dev",
+    "web:build": "pnpm -C web run build",
+    "web:preview": "pnpm -C web run preview",
+    "web:wasm": "pnpm -C web run wasm",
+    "web:wasm:release": "pnpm -C web run wasm:release"
   },
   "keywords": [],
   "author": "",
