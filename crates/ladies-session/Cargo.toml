@@ -2,6 +2,7 @@
 name = "ladies-session"
 version.workspace = true
 edition.workspace = true
+license.workspace = true
 
 [dependencies]
 ladies-sim = { workspace = true }
