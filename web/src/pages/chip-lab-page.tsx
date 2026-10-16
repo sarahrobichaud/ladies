@@ -1,18 +1,18 @@
 import { useRef, useState } from "react";
 import { Link } from "react-router";
-import { chipLabel, formatChips } from "../../snapshot";
-import { CATALOG } from "../chips/catalog";
-import { Chip } from "../chips/chip";
-import { parseRuns } from "../chips/notation";
-import { coalesce } from "../chips/runs";
-import type { Catalog, Run } from "../chips/types";
-import { ChipTray } from "./chip-tray";
-import { clearBoard, STACK_CAPACITY, spawnStack, totalValue } from "./felt";
-import { FeltCanvas } from "./felt-canvas";
-import { useFelt } from "./hooks/use-felt";
-import { useFeltGestures } from "./hooks/use-felt-gestures";
-import { nearestFreeSlot } from "./interaction";
-import { allSlots } from "./lattice";
+import { chipLabel, formatChips } from "../snapshot";
+import { CATALOG } from "../features/chips/catalog";
+import { Chip } from "../features/chips/chip";
+import { parseRuns } from "../features/chips/notation";
+import { coalesce } from "../features/chips/runs";
+import type { Catalog, Run } from "../features/chips/types";
+import { ChipTray } from "../features/felt/chip-tray";
+import { clearBoard, STACK_CAPACITY, spawnStack, totalValue } from "../features/felt/felt";
+import { FeltCanvas } from "../features/felt/felt-canvas";
+import { useFelt } from "../features/felt/hooks/use-felt";
+import { useFeltGestures } from "../features/felt/hooks/use-felt-gestures";
+import { nearestFreeSlot } from "../features/felt/interaction";
+import { allSlots } from "../features/felt/lattice";
 
 // A random canonical stack: 1..STACK_CAPACITY chips split into runs of
 // random denominations. coalesce merges adjacent same-kind runs.
@@ -29,7 +29,7 @@ function randomRuns(catalog: Catalog): Run[] {
   return coalesce(runs);
 }
 
-export function ChipLab() {
+export function ChipLabPage() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const { felt, apply } = useFelt(CATALOG);
   const gestures = useFeltGestures({ felt, apply, canvasRef });
@@ -77,12 +77,9 @@ export function ChipLab() {
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-lg text-ink">Chip lab</h1>
-          <p className="text-sm text-muted">
-            Stacks are compressed entities — grab the top, split lower, wheel-size, combine on tops.
-          </p>
+          <p className="text-sm text-muted">On the table: {formatChips(total)}</p>
         </div>
         <div className="flex items-center gap-3">
-          <p className="text-sm tabular-nums text-muted">On the table: {formatChips(total)}</p>
           <form
             className="flex items-center gap-1.5"
             onSubmit={(e) => {
@@ -132,11 +129,6 @@ export function ChipLab() {
             <span className="text-[10px] text-muted">{chipLabel(kind.value)}</span>
           </div>
         ))}
-        <p className="ml-auto max-w-56 text-xs leading-relaxed text-muted">
-          Press a tray chip to place one, or drag it straight onto the felt. Chips land on the slots — lower a stack
-          onto another stack's top to combine; occupied slots are skipped, and dropping off the felt takes chips back.
-          Right-click carries a whole stack; scroll while holding one to size it (max {STACK_CAPACITY}).
-        </p>
       </div>
 
       <div className="flex min-h-0 flex-1 gap-4">
