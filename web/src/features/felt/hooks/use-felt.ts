@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { createBoard, type Felt } from '../felt';
-import type { Catalog } from '../../chips/types';
+import { useState } from "react";
+import type { Catalog } from "../../chips/types";
+import { createBoard, type Felt } from "../felt";
 
 /**
  * Owns the felt state and exposes a stable dispatcher for the pure felt

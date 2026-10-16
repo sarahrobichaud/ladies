@@ -1,4 +1,4 @@
-import type { Catalog } from './types';
+import type { Catalog } from "./types";
 
 export const CATALOG: Catalog = [
   { value: 1n, tier: 0 },

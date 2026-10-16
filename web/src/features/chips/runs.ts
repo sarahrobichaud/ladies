@@ -1,4 +1,4 @@
-import type { Catalog, Chip, ChipId, Run } from './types';
+import type { Catalog, Chip, ChipId, Run } from "./types";
 
 /**
  * Merge adjacent same-kind runs and drop empty ones, returning the

@@ -75,16 +75,15 @@ const STATUS_CLASSES: Record<PlayerSnapshot['status'], string> = {
 };
 
 export function PlayerCard({
-  seat,
   player,
   isButton = false,
   isToAct = false,
 }: {
-  seat: number;
   player: PlayerSnapshot;
   isButton?: boolean;
   isToAct?: boolean;
 }) {
+  const seat = player.seat;
   const dimmed = player.status === 'folded';
 
   return (
@@ -151,7 +150,7 @@ export function PlayerCard({
         <div className="pointer-events-none absolute -bottom-6 right-3 flex items-end">
           {player.hole.map((card, i) => (
             <PlayingCard
-              key={i}
+              key={`${card.rank}-${card.suit}`}
               card={card}
               size="lg"
               className={i > 0 ? '-ml-8' : undefined}

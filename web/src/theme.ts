@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { readStoredTheme, STORAGE_KEY, type Theme } from './scripts/theme-init';
+import { useEffect, useState } from "react";
+import { readStoredTheme, STORAGE_KEY, type Theme } from "./scripts/theme-init";
 
 export type { Theme };
 
@@ -11,5 +11,5 @@ export function useTheme() {
     localStorage.setItem(STORAGE_KEY, theme);
   }, [theme]);
 
-  return { theme, toggle: () => setTheme((t) => (t === 'dark' ? 'light' : 'dark')) };
+  return { theme, toggle: () => setTheme((t) => (t === "dark" ? "light" : "dark")) };
 }

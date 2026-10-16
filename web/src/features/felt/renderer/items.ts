@@ -1,11 +1,11 @@
-import { CHIP_RADIUS, CHIP_SQUASH } from '../world';
-import type { FontFace } from './text';
-import type { RGB, RGBA, RingItem, SceneItem } from './primitives';
+import { CHIP_RADIUS, CHIP_SQUASH } from "../world";
+import type { RGB, RGBA, RingItem, SceneItem } from "./primitives";
+import type { FontFace } from "./text";
 
 // Constructors for scene draw items — the vocabulary helpers buildScene composes.
 
 /** Max rotation of a non-top chip, in radians (~10°). */
-const MAX_CHIP_ROTATION = 0.50;
+const MAX_CHIP_ROTATION = 0.5;
 
 // Hash primes: Knuth's multiplicative hash and xxHash's finalizer.
 const HASH_SEED_PRIME = 2654435761;
@@ -35,7 +35,7 @@ export function ring(
   fill: RGBA | null,
   soft = 0,
 ): RingItem {
-  return { kind: 'ring', x, y, rx, ry, width, dash, stroke, fill, soft };
+  return { kind: "ring", x, y, rx, ry, width, dash, stroke, fill, soft };
 }
 
 /**
@@ -48,7 +48,7 @@ export function ring(
  */
 export function shadow(x: number, y: number, spread: number, alpha: number, soft: number): RingItem {
   return {
-    kind: 'ring',
+    kind: "ring",
     x,
     y,
     rx: CHIP_RADIUS + spread,
@@ -70,14 +70,7 @@ export function shadow(x: number, y: number, spread: number, alpha: number, soft
  * @param cy - middle-baseline y in px
  * @param color - text color
  */
-export function pushLabel(
-  items: SceneItem[],
-  font: FontFace,
-  text: string,
-  cx: number,
-  cy: number,
-  color: RGB,
-) {
+export function pushLabel(items: SceneItem[], font: FontFace, text: string, cx: number, cy: number, color: RGB) {
   const width = font.width(text);
   const left = cx - width / 2;
   for (const glyph of font.glyphs(text, left, cy, color)) {

@@ -50,15 +50,16 @@ export function PokerTable({
       <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
         {board.length > 0 && (
           <div className="flex gap-1.5">
-            {board.map((card, i) => (
-              <PlayingCard key={i} card={card} size="lg" />
+            {board.map((card) => (
+              <PlayingCard key={`${card.rank}-${card.suit}`} card={card} size="lg" />
             ))}
           </div>
         )}
         <p className="text-sm font-semibold text-on-felt">Pot {formatChips(pot)}</p>
       </div>
 
-      {players.map((player, seat) => {
+      {players.map((player) => {
+        const seat = player.seat;
         const rad = (seatAngle(seat, count) * Math.PI) / 180;
         const style: CSSProperties = {
           left: `${50 + RADIUS_X * Math.cos(rad)}%`,
@@ -68,7 +69,6 @@ export function PokerTable({
         return (
           <div key={seat} style={style} className="absolute">
             <PlayerCard
-              seat={seat}
               player={player}
               isButton={seat === button}
               isToAct={seat === toAct}

@@ -1,7 +1,7 @@
-import { CHIP_RADIUS, CHIP_SQUASH, STACK_LIFT } from './world';
-import { allSlots, slotPosition, type Slot } from './lattice';
-import { stackSize, type Felt, type Stack, type StackId } from './felt';
-import type { Point } from './geom';
+import { type Felt, type Stack, type StackId, stackSize } from "./felt";
+import type { Point } from "./geom";
+import { allSlots, type Slot, slotPosition } from "./lattice";
+import { CHIP_RADIUS, CHIP_SQUASH, STACK_LIFT } from "./world";
 
 /** Pointer semantics against the resting felt, as pure geometry. */
 
@@ -78,9 +78,9 @@ function wallContains(dx: number, dy: number): boolean {
 
 /** The outcome of releasing the hand at a point. */
 export type Landing =
-  | { type: 'combine'; stackId: StackId; slot: Slot; ring: Point }
-  | { type: 'place'; slot: Slot; ring: Point }
-  | { type: 'none' };
+  | { type: "combine"; stackId: StackId; slot: Slot; ring: Point }
+  | { type: "place"; slot: Slot; ring: Point }
+  | { type: "none" };
 
 /**
  * Single authority for the landing preview and the commit; occupied slots never combine implicitly.
@@ -90,14 +90,14 @@ export type Landing =
 export function landingFor(felt: Felt, point: Point): Landing {
   const hand = felt.hand;
   if (!hand || hand.chips.length === 0) {
-    return { type: 'none' };
+    return { type: "none" };
   }
 
   const target = combineTargetAt(felt, point);
   if (target) {
     const { x, y } = slotPosition(target.slot);
     return {
-      type: 'combine',
+      type: "combine",
       stackId: target.id,
       slot: target.slot,
       ring: { x, y: y - stackSize(target) * STACK_LIFT },
@@ -106,9 +106,9 @@ export function landingFor(felt: Felt, point: Point): Landing {
 
   const slot = nearestFreeSlot(felt, point.x, point.y);
   if (slot) {
-    return { type: 'place', slot, ring: slotPosition(slot) };
+    return { type: "place", slot, ring: slotPosition(slot) };
   }
-  return { type: 'none' };
+  return { type: "none" };
 }
 
 /**
@@ -168,12 +168,7 @@ export function nearestSlotAny(felt: Felt, x: number, y: number): Slot | null {
  * @param y - The pointer y in felt pixels.
  * @param isCandidate - Decides whether a slot may be returned.
  */
-function nearestSlotWhere(
-  felt: Felt,
-  x: number,
-  y: number,
-  isCandidate: (slot: Slot) => boolean,
-): Slot | null {
+function nearestSlotWhere(felt: Felt, x: number, y: number, isCandidate: (slot: Slot) => boolean): Slot | null {
   let best: Slot | null = null;
   let bestDistance = Infinity;
   for (const slot of allSlots(felt.felt)) {

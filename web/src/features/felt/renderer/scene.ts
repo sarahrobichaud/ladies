@@ -1,20 +1,20 @@
 // The scene builder: pure translation from Felt + interaction state to
 // renderer primitives, in painter's order. No GL, no React.
 
-import { CHIP_RADIUS, CHIP_SQUASH, STACK_LIFT } from '../world';
-import type { FontFace } from './text';
-import type { SceneItem } from './primitives';
-import { chipLabel, formatChips } from '../../../snapshot';
-import { runsValue } from '../../chips/runs';
-import { stackSize, type Felt, type Stack } from '../felt';
-import { allSlots, slotPosition } from '../lattice';
-import { landingFor, stackTopOffset, type Drag, type Landing, type Lift, type Pick } from '../interaction';
-import type { Point } from '../geom';
-import { chipAngle, pushLabel, rgba, ring, shade, shadow } from './items';
-import type { SceneColors } from './colors';
+import { chipLabel, formatChips } from "../../../snapshot";
+import { runsValue } from "../../chips/runs";
+import { type Felt, type Stack, stackSize } from "../felt";
+import type { Point } from "../geom";
+import { type Drag, type Landing, type Lift, landingFor, type Pick, stackTopOffset } from "../interaction";
+import { allSlots, slotPosition } from "../lattice";
+import { CHIP_RADIUS, CHIP_SQUASH, STACK_LIFT } from "../world";
+import type { SceneColors } from "./colors";
+import { chipAngle, pushLabel, rgba, ring, shade, shadow } from "./items";
+import type { SceneItem } from "./primitives";
+import type { FontFace } from "./text";
 
-export type { SceneColors } from './colors';
-export type { Drag, Lift } from '../interaction';
+export type { Drag, Lift } from "../interaction";
+export type { SceneColors } from "./colors";
 
 // --- scene paint constants (px / alpha) ---------------------------------------
 
@@ -97,10 +97,7 @@ export function buildScene(input: SceneInput): SceneItem[] {
   pushLattice(items, felt, colors);
 
   const landing = felt.hand && handPos ? landingFor(felt, handPos) : null;
-  const mergeTarget =
-    landing?.type === 'combine'
-      ? (felt.stacks.find((s) => s.id === landing.stackId) ?? null)
-      : null;
+  const mergeTarget = landing?.type === "combine" ? (felt.stacks.find((s) => s.id === landing.stackId) ?? null) : null;
 
   pushLandingGhost(items, landing, colors);
   if (mergeTarget) {
@@ -140,11 +137,11 @@ function pushLattice(items: SceneItem[], felt: Felt, colors: SceneColors) {
 
 /** Draw the landing ghost where the hand's bottom chip would sit. */
 function pushLandingGhost(items: SceneItem[], landing: Landing | null, colors: SceneColors) {
-  if (!landing || landing.type === 'none') {
+  if (!landing || landing.type === "none") {
     return;
   }
 
-  const isCombine = landing.type === 'combine';
+  const isCombine = landing.type === "combine";
   items.push(
     ring(
       landing.ring.x,
@@ -160,12 +157,7 @@ function pushLandingGhost(items: SceneItem[], landing: Landing | null, colors: S
 }
 
 /** Draw the pulsing halo around the stack the hand will combine with. */
-function pushMergeHalo(
-  items: SceneItem[],
-  target: Stack,
-  colors: SceneColors,
-  time: number,
-) {
+function pushMergeHalo(items: SceneItem[], target: Stack, colors: SceneColors, time: number) {
   const { x, y } = slotPosition(target.slot);
   const height = (stackSize(target) - 1) * STACK_LIFT;
   const pulse = 0.5 + 0.5 * Math.sin(time / HALO_PULSE_PERIOD_MS);
@@ -187,27 +179,21 @@ function pushMergeHalo(
 
 /** Order stacks bottom-of-screen first, so lower stacks occlude higher ones. */
 function stacksBackToFront(felt: Felt): Stack[] {
-  return [...felt.stacks].sort(
-    (a, b) => slotPosition(a.slot).y - slotPosition(b.slot).y,
-  );
+  return [...felt.stacks].sort((a, b) => slotPosition(a.slot).y - slotPosition(b.slot).y);
 }
 
 /** Draw one contact shadow per stack, hoisted ahead of all stack ink. */
 function pushStackShadows(items: SceneItem[], stacks: Stack[]) {
   for (const stack of stacks) {
     const { x, y } = slotPosition(stack.slot);
-    items.push(shadow(x, y + STACK_LIFT + STACK_SHADOW_DROP, STACK_SHADOW_SPREAD, STACK_SHADOW_ALPHA, STACK_SHADOW_SOFT));
+    items.push(
+      shadow(x, y + STACK_LIFT + STACK_SHADOW_DROP, STACK_SHADOW_SPREAD, STACK_SHADOW_ALPHA, STACK_SHADOW_SOFT),
+    );
   }
 }
 
 /** Draw one stack: walls in one run, then the exposed faces with labels. */
-function pushStack(
-  items: SceneItem[],
-  felt: Felt,
-  stack: Stack,
-  mergeTarget: Stack | null,
-  ctx: StackContext,
-) {
+function pushStack(items: SceneItem[], felt: Felt, stack: Stack, mergeTarget: Stack | null, ctx: StackContext) {
   const { drag, hover, lift, colors, fonts } = ctx;
   const isMergeTarget = mergeTarget?.id === stack.id;
   const dimFactor = drag !== null && !isMergeTarget ? DIM_FACTOR : 1;
@@ -221,14 +207,13 @@ function pushStack(
   const liftValue = liftState?.value ?? 0;
   const topHover = hovered?.isTop === true;
 
-  const cyAt = (depth: number) =>
-    y - depth * STACK_LIFT - (cut !== null && depth >= cut ? liftValue : 0);
+  const cyAt = (depth: number) => y - depth * STACK_LIFT - (cut !== null && depth >= cut ? liftValue : 0);
   const angleAt = (depth: number) => (depth === size - 1 ? 0 : chipAngle(stack.id, depth));
 
   const pushWall = (depth: number) => {
     const palette = colors.tiers[kindAt[depth] % colors.tiers.length];
     items.push({
-      kind: 'wall',
+      kind: "wall",
       x,
       y: cyAt(depth),
       face: palette.face,
@@ -242,7 +227,7 @@ function pushStack(
   const pushFace = (depth: number) => {
     const palette = colors.tiers[kindAt[depth] % colors.tiers.length];
     items.push({
-      kind: 'chip',
+      kind: "chip",
       x,
       y: cyAt(depth),
       face: palette.face,
@@ -271,7 +256,16 @@ function pushStack(
       pushFace(cut - 1);
     }
     items.push(
-      ring(x, y - cut * STACK_LIFT, CHIP_RADIUS, CHIP_RADIUS * CHIP_SQUASH, GHOST_RING_WIDTH, GHOST_RING_DASH, rgba(colors.orange, 1), null),
+      ring(
+        x,
+        y - cut * STACK_LIFT,
+        CHIP_RADIUS,
+        CHIP_RADIUS * CHIP_SQUASH,
+        GHOST_RING_WIDTH,
+        GHOST_RING_DASH,
+        rgba(colors.orange, 1),
+        null,
+      ),
     );
     for (let depth = cut; depth < size; depth++) pushWall(depth);
     pushFace(size - 1);
@@ -288,19 +282,21 @@ function kindsAt(stack: Stack): number[] {
 }
 
 /** Draw the held hand: a soft shadow plus a wall, face, and label per chip. */
-function pushHand(
-  items: SceneItem[],
-  felt: Felt,
-  handPos: Point | null,
-  colors: SceneColors,
-  fonts: SceneFonts,
-) {
+function pushHand(items: SceneItem[], felt: Felt, handPos: Point | null, colors: SceneColors, fonts: SceneFonts) {
   if (!felt.hand || !handPos) {
     return;
   }
 
   // Held above the table: a softer, wider shadow offset further down.
-  items.push(shadow(handPos.x, handPos.y + STACK_LIFT + HAND_SHADOW_DROP, HAND_SHADOW_SPREAD, HAND_SHADOW_ALPHA, HAND_SHADOW_SOFT));
+  items.push(
+    shadow(
+      handPos.x,
+      handPos.y + STACK_LIFT + HAND_SHADOW_DROP,
+      HAND_SHADOW_SPREAD,
+      HAND_SHADOW_ALPHA,
+      HAND_SHADOW_SOFT,
+    ),
+  );
 
   const chips = felt.hand.chips;
   const topIndex = chips.length - 1;
@@ -313,7 +309,7 @@ function pushHand(
     const angle = i === topIndex ? 0 : chipAngle(chip.id, i);
 
     items.push({
-      kind: 'wall',
+      kind: "wall",
       x: handPos.x,
       y: cy,
       face: palette.face,
@@ -323,7 +319,7 @@ function pushHand(
       angle,
     });
     items.push({
-      kind: 'chip',
+      kind: "chip",
       x: handPos.x,
       y: cy,
       face: palette.face,
@@ -367,7 +363,7 @@ function pushHoverBadge(
   const textWidth = fonts.badge.width(text);
 
   items.push({
-    kind: 'panel',
+    kind: "panel",
     x,
     y: badgeY,
     hw: textWidth / 2 + BADGE_PADDING_X,

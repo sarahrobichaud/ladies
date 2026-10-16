@@ -1,7 +1,7 @@
-import { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router';
-import { WasmSession, wasmReady } from '../session';
-import { setSession } from '../session-store';
+import { useEffect, useState } from "react";
+import { Link, useNavigate } from "react-router";
+import { WasmSession, wasmReady } from "../session";
+import { setSession } from "../session-store";
 
 const MIN_PLAYERS = 2;
 const MAX_PLAYERS = 9;
@@ -14,7 +14,7 @@ export type SessionConfig = {
 };
 
 const inputClass =
-  'mt-1 w-full rounded-md border border-line bg-raised px-3 py-2 text-ink focus:border-blue focus:ring-2 focus:ring-blue/30 focus:outline-none';
+  "mt-1 w-full rounded-md border border-line bg-raised px-3 py-2 text-ink focus:border-blue focus:ring-2 focus:ring-blue/30 focus:outline-none";
 
 // Parse a draft text field into a positive integer, or null while the input
 // is empty/partial so typing isn't fought by clamping.
@@ -56,23 +56,16 @@ function NumberField({
   );
 }
 
-function SessionConfigCard({
-  disabled,
-  onStart,
-}: {
-  disabled: boolean;
-  onStart: (config: SessionConfig) => void;
-}) {
+function SessionConfigCard({ disabled, onStart }: { disabled: boolean; onStart: (config: SessionConfig) => void }) {
   const [players, setPlayers] = useState(6);
   // Draft text (what the user sees) plus last valid values (what we submit).
-  const [chipsText, setChipsText] = useState('5000');
-  const [smallText, setSmallText] = useState('100');
+  const [chipsText, setChipsText] = useState("5000");
+  const [smallText, setSmallText] = useState("100");
   const [chips, setChips] = useState(5000);
   const [smallBlind, setSmallBlind] = useState(100);
   const bigBlind = smallBlind * 2;
 
-  const clampPlayers = (value: number) =>
-    Math.min(MAX_PLAYERS, Math.max(MIN_PLAYERS, value));
+  const clampPlayers = (value: number) => Math.min(MAX_PLAYERS, Math.max(MIN_PLAYERS, value));
 
   const updateChips = (text: string) => {
     setChipsText(text);
@@ -104,10 +97,7 @@ function SessionConfigCard({
           >
             −
           </button>
-          <output
-            id="player-count"
-            className="w-10 text-center text-lg font-medium text-ink"
-          >
+          <output id="player-count" className="w-10 text-center text-lg font-medium text-ink">
             {players}
           </output>
           <button
@@ -151,12 +141,9 @@ function SessionConfigCard({
         disabled={disabled}
         onClick={() => onStart({ players, chips, smallBlind, bigBlind })}
       >
-        {disabled ? 'Loading engine…' : 'Start session'}
+        {disabled ? "Loading engine…" : "Start session"}
       </button>
-      <Link
-        to="/chips"
-        className="mt-3 block text-center text-sm text-muted hover:text-orange"
-      >
+      <Link to="/chips" className="mt-3 block text-center text-sm text-muted hover:text-orange">
         Chip lab
       </Link>
     </section>
@@ -177,7 +164,7 @@ export function ConfigPage() {
     const session = new WasmSession(BigInt(smallBlind), BigInt(bigBlind), stacks);
     session.start_hand(1n);
     setSession(session);
-    navigate('/table');
+    navigate("/table");
   };
 
   return (

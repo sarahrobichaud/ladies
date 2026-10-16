@@ -1,36 +1,32 @@
-import { useEffect, useRef, useState } from 'react';
-import type {
-  MouseEvent as ReactMouseEvent,
-  PointerEvent as ReactPointerEvent,
-  RefObject,
-} from 'react';
-import {
-  PREVIEW_LIFT,
-  landingFor,
-  nearestFreeSlot,
-  nearestSlotAny,
-  pickAt,
-  type Drag,
-  type Lift,
-  type Pick,
-} from '../interaction';
-import { slotPosition, type Slot } from '../lattice';
-import { STACK_LIFT } from '../world';
-import type { Point } from '../geom';
-import type { KindId } from '../../chips/types';
+import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, RefObject } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useLatestRef } from "../../../hooks/use-latest-ref";
+import type { KindId } from "../../chips/types";
 import {
   commitHand,
   discardHand,
+  type Felt,
   pickFrom,
   pickStack,
   pickTop,
+  type StackId,
   sizeHand,
   spawnStack,
   takeFromTray,
-  type Felt,
-  type StackId,
-} from '../felt';
-import { useLatestRef } from '../../../hooks/use-latest-ref';
+} from "../felt";
+import type { Point } from "../geom";
+import {
+  type Drag,
+  type Lift,
+  landingFor,
+  nearestFreeSlot,
+  nearestSlotAny,
+  type Pick,
+  PREVIEW_LIFT,
+  pickAt,
+} from "../interaction";
+import { type Slot, slotPosition } from "../lattice";
+import { STACK_LIFT } from "../world";
 
 /** Pointer travel before a tray press becomes a drag, in px. */
 const SPAWN_THRESHOLD = 6;
@@ -40,10 +36,10 @@ type Spawn = { kind: KindId; pointerId: number; startX: number; startY: number }
 
 /** Semantic outcomes of felt gestures, for callers reacting to interactions. */
 export type FeltAction =
-  | { type: 'pick'; stackId: StackId; depth: number; isTop: boolean }
-  | { type: 'drop'; slot: Slot; combined: boolean }
-  | { type: 'discard' }
-  | { type: 'spawn'; kind: KindId; slot: Slot };
+  | { type: "pick"; stackId: StackId; depth: number; isTop: boolean }
+  | { type: "drop"; slot: Slot; combined: boolean }
+  | { type: "discard" }
+  | { type: "spawn"; kind: KindId; slot: Slot };
 
 /** Pointer handlers for the felt canvas element. */
 export type CanvasHandlers = {
@@ -123,8 +119,8 @@ export function useFeltGestures({ felt, apply, canvasRef, onAction }: Options) {
       e.preventDefault();
       apply((f) => sizeHand(f, e.deltaY < 0 ? 1 : -1));
     };
-    el.addEventListener('wheel', onWheel, { passive: false });
-    return () => el.removeEventListener('wheel', onWheel);
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
   }, [canvasRef, dragRef, apply]);
 
   /**
@@ -240,18 +236,18 @@ export function useFeltGestures({ felt, apply, canvasRef, onAction }: Options) {
     if (!rectContains(rect, e.clientX, e.clientY)) {
       apply(discardHand);
       setHandPos(null);
-      onActionRef.current?.({ type: 'discard' });
+      onActionRef.current?.({ type: "discard" });
       return;
     }
     const landingAt = landingFor(feltRef.current, pos);
     const slot: Slot | null =
-      landingAt.type === 'none' ? nearestSlotAny(feltRef.current, pos.x, pos.y) : landingAt.slot;
+      landingAt.type === "none" ? nearestSlotAny(feltRef.current, pos.x, pos.y) : landingAt.slot;
     if (!slot) {
       return;
     }
     apply((f) => commitHand(f, slot));
     setHandPos(null);
-    onActionRef.current?.({ type: 'drop', slot, combined: landingAt.type === 'combine' });
+    onActionRef.current?.({ type: "drop", slot, combined: landingAt.type === "combine" });
   };
 
   /**
@@ -269,7 +265,7 @@ export function useFeltGestures({ felt, apply, canvasRef, onAction }: Options) {
       return;
     }
     apply((f) => spawnStack(f, [{ kind: s.kind, count: 1 }], slot));
-    onActionRef.current?.({ type: 'spawn', kind: s.kind, slot });
+    onActionRef.current?.({ type: "spawn", kind: s.kind, slot });
   };
 
   const onPointerUp = (e: ReactPointerEvent<Element>) => {
@@ -328,7 +324,7 @@ export function useFeltGestures({ felt, apply, canvasRef, onAction }: Options) {
       grabY: e.clientY - (rect.top + visual.y),
     });
     onActionRef.current?.({
-      type: 'pick',
+      type: "pick",
       stackId: pick.stackId,
       depth: pick.depth,
       isTop: pick.isTop,
@@ -340,13 +336,12 @@ export function useFeltGestures({ felt, apply, canvasRef, onAction }: Options) {
    * @param kind - the pressed tray chip's kind id
    * @returns the pointerdown handler for that chip
    */
-  const onTrayPointerDown =
-    (kind: KindId) => (e: ReactPointerEvent<HTMLDivElement>) => {
-      e.preventDefault();
-      e.currentTarget.setPointerCapture(e.pointerId);
-      setHover(null);
-      setSpawn({ kind, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY });
-    };
+  const onTrayPointerDown = (kind: KindId) => (e: ReactPointerEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    setHover(null);
+    setSpawn({ kind, pointerId: e.pointerId, startX: e.clientX, startY: e.clientY });
+  };
 
   const canvasHandlers: CanvasHandlers = {
     onPointerDown: onCanvasPointerDown,

@@ -3,16 +3,17 @@
 // safe integer (BigInt only beyond that), so chip fields are normalized
 // to BigInt at the boundary via `normalizeSnapshot`.
 
-export type Suit = 'heart' | 'club' | 'spade' | 'diamond';
+export type Suit = "heart" | "club" | "spade" | "diamond";
 
 export type CardDto = {
   rank: number; // 2..14 (Ace = 14)
   suit: Suit;
 };
 
-export type PlayerStatus = 'active' | 'folded' | 'all-in';
+export type PlayerStatus = "active" | "folded" | "all-in";
 
 export type PlayerSnapshot = {
+  seat: number;
   stack: bigint;
   bet: bigint;
   committed: bigint;
@@ -55,8 +56,9 @@ export function normalizeSnapshot(snapshot: SessionSnapshot): SessionSnapshot {
       current_bet: chips(hand.current_bet),
       min_raise: chips(hand.min_raise),
       pot: chips(hand.pot),
-      players: hand.players.map((p) => ({
+      players: hand.players.map((p, seat) => ({
         ...p,
+        seat,
         stack: chips(p.stack),
         bet: chips(p.bet),
         committed: chips(p.committed),

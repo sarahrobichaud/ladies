@@ -13,7 +13,7 @@ const COMMIT_DISTANCE = 70;
 // Palette tier for the all-in stack (the "black" chip).
 const ALL_IN_TIER = 3;
 
-type PendingChip = { value: bigint; tier: number };
+type PendingChip = { id: number; value: bigint; tier: number };
 
 type DragSeed =
   | { kind: 'card'; index: number }
@@ -117,7 +117,8 @@ export function ActionDeck({
   const pendingTotal = pending.reduce((sum, c) => sum + c.value, 0n);
 
   const [drag, setDrag] = useState<Drag | null>(null);
-  const zoneRef = useRef<HTMLDivElement | null>(null);
+  const zoneRef = useRef<HTMLButtonElement | null>(null);
+  const nextChipId = useRef(1);
 
   const plan = commitPlan(pendingTotal, player, facingBet, callAmount, hand.min_raise);
 
@@ -174,7 +175,7 @@ export function ActionDeck({
       const { value, tier } = drag;
       // Can't put more chips on the line than the stack holds.
       if (pendingTotal + value <= player.stack) {
-        setLine({ epoch, chips: [...pending, { value, tier }] });
+        setLine({ epoch, chips: [...pending, { id: nextChipId.current++, value, tier }] });
       }
       return;
     }
@@ -182,7 +183,7 @@ export function ActionDeck({
       if (drag.committing) onAct('all-in');
       else if (drag.overZone) {
         // Shoving replaces whatever is on the line: everything goes in.
-        setLine({ epoch, chips: [{ value: player.stack, tier: ALL_IN_TIER }] });
+        setLine({ epoch, chips: [{ id: nextChipId.current++, value: player.stack, tier: ALL_IN_TIER }] });
       }
       return;
     }
@@ -295,7 +296,8 @@ export function ActionDeck({
         )}
 
         {/* Betting line: chip drop zone + check tap target */}
-        <div
+        <button
+          type="button"
           ref={zoneRef}
           onClick={() => {
             if (live && !facingBet && pendingTotal === 0n) onAct('check');
@@ -320,7 +322,7 @@ export function ActionDeck({
               <div className="flex items-center">
                 {pending.map((c, i) => (
                   <Chip
-                    key={i}
+                    key={c.id}
                     value={c.value}
                     tier={c.tier}
                     size={36}
@@ -339,7 +341,7 @@ export function ActionDeck({
                 : 'Tap here to check · drop chips here to bet'}
             </span>
           )}
-        </div>
+        </button>
 
         {/* Your side: chip rack (left) + hole cards (right) */}
         <div className="absolute inset-x-0 bottom-0 z-10 flex items-end justify-between gap-3 p-3">
@@ -356,7 +358,7 @@ export function ActionDeck({
                 const d = chipDrag(i);
                 return (
                   <div
-                    key={i}
+                    key={value.toString()}
                     className={`draggable ${d ? 'cursor-grabbing' : 'cursor-grab'}`}
                     style={dragStyle(!!d, d?.dx ?? 0, d?.dy ?? 0, 'scale(1.1)')}
                     {...chipHandlers(i, value, i)}
@@ -392,7 +394,7 @@ export function ActionDeck({
               const d = cardDrag(i);
               return (
                 <div
-                  key={i}
+                  key={`${card.rank}-${card.suit}`}
                   className={`draggable ${d ? 'cursor-grabbing' : 'cursor-grab'}`}
                   style={dragStyle(
                     !!d,

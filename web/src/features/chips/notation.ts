@@ -1,5 +1,5 @@
-import { coalesce } from './runs';
-import type { Catalog, Run } from './types';
+import { coalesce } from "./runs";
+import type { Catalog, Run } from "./types";
 
 // Stack notation — text ⇄ runs, resolved through the catalog.
 
@@ -16,8 +16,8 @@ const PAIR = /\(\d+,\d+\)/g;
  * @throws Error on malformed text, an unknown value, or a non-positive count
  */
 export function parseRuns(text: string, catalog: Catalog): Run[] {
-  const compact = text.replace(/\s+/g, '');
-  if (compact === '') return [];
+  const compact = text.replace(/\s+/g, "");
+  if (compact === "") return [];
 
   if (!GRAMMAR.test(compact)) {
     throw new Error(`bad run "${text.trim()}" — expected (value, count) pairs`);
@@ -38,12 +38,12 @@ export function parseRuns(text: string, catalog: Catalog): Run[] {
  * @throws Error if the count is not positive or the value is not in the catalog
  */
 function resolvePair(pair: string, catalog: Catalog): Run {
-  const [rawValue, rawCount] = pair.slice(1, -1).split(',');
+  const [rawValue, rawCount] = pair.slice(1, -1).split(",");
   const value = BigInt(rawValue);
   const count = Number(rawCount);
 
   if (count <= 0) {
-    throw new Error('run count must be positive');
+    throw new Error("run count must be positive");
   }
 
   const kind = catalog.findIndex((k) => k.value === value);

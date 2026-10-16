@@ -1,14 +1,7 @@
-import {
-  coalesce,
-  materialize,
-  runsFromChips,
-  runsSize,
-  runsValue,
-  splitRuns,
-} from '../chips/runs';
-import type { Catalog, Chip, KindId, Run } from '../chips/types';
-import type { Slot } from './lattice';
-import type { Size } from './geom';
+import { coalesce, materialize, runsFromChips, runsSize, runsValue, splitRuns } from "../chips/runs";
+import type { Catalog, Chip, KindId, Run } from "../chips/types";
+import type { Size } from "./geom";
+import type { Slot } from "./lattice";
 
 /**
  * Felt state and pure Felt → Felt ops that keep the invariants
@@ -105,9 +98,7 @@ export function placeRuns(felt: Felt, runs: Run[], slot: Slot): Felt {
   if (occupant) {
     return {
       ...felt,
-      stacks: felt.stacks.map((s) =>
-        s.id === occupant.id ? { ...s, runs: coalesce([...s.runs, ...canonical]) } : s,
-      ),
+      stacks: felt.stacks.map((s) => (s.id === occupant.id ? { ...s, runs: coalesce([...s.runs, ...canonical]) } : s)),
     };
   }
   return {
@@ -269,12 +260,7 @@ export function discardHand(felt: Felt): Felt {
  * @param felt - The felt to sum.
  */
 export function totalValue(felt: Felt): bigint {
-  const stacks = felt.stacks.reduce(
-    (sum, s) => sum + runsValue(s.runs, felt.catalog),
-    0n,
-  );
-  const hand = felt.hand
-    ? felt.hand.chips.reduce((sum, c) => sum + felt.catalog[c.kind].value, 0n)
-    : 0n;
+  const stacks = felt.stacks.reduce((sum, s) => sum + runsValue(s.runs, felt.catalog), 0n);
+  const hand = felt.hand ? felt.hand.chips.reduce((sum, c) => sum + felt.catalog[c.kind].value, 0n) : 0n;
   return stacks + hand;
 }

@@ -94,7 +94,10 @@ function applyAction(
     case 'call':
       return session.call();
     case 'raise':
-      return session.raise_to(raiseTo!);
+      if (raiseTo === undefined) {
+        throw new Error('raise requires an amount');
+      }
+      return session.raise_to(raiseTo);
     case 'all-in':
       return session.all_in();
   }

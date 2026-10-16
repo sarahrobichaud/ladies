@@ -1,12 +1,12 @@
-import { useEffect, useRef } from 'react';
-import type { RefObject } from 'react';
-import { useCanvasRenderLoop } from '../../hooks/use-canvas-render-loop';
-import { useLatestRef } from '../../hooks/use-latest-ref';
-import { setFelt as resizeFelt, type Felt } from './felt';
-import { useSceneColors } from './hooks/use-scene-colors';
-import type { FeltGestures } from './hooks/use-felt-gestures';
-import { createPrimitiveRenderer, type PrimitiveRenderer } from './renderer/renderer';
-import { buildScene } from './renderer/scene';
+import type { RefObject } from "react";
+import { useEffect, useRef } from "react";
+import { useCanvasRenderLoop } from "../../hooks/use-canvas-render-loop";
+import { useLatestRef } from "../../hooks/use-latest-ref";
+import { type Felt, setFelt as resizeFelt } from "./felt";
+import type { FeltGestures } from "./hooks/use-felt-gestures";
+import { useSceneColors } from "./hooks/use-scene-colors";
+import { createPrimitiveRenderer, type PrimitiveRenderer } from "./renderer/renderer";
+import { buildScene } from "./renderer/scene";
 
 type FeltCanvasProps = {
   felt: Felt;
@@ -49,7 +49,7 @@ export function FeltCanvas({ felt, apply, canvasRef, gestures, className, emptyL
     try {
       renderer = createPrimitiveRenderer(el);
     } catch (err) {
-      console.error('felt renderer: WebGL init failed', err);
+      console.error("felt renderer: WebGL init failed", err);
     }
     rendererRef.current = renderer;
     return () => {
@@ -69,8 +69,8 @@ export function FeltCanvas({ felt, apply, canvasRef, gestures, className, emptyL
       const colors = colorsRef.current;
       const lift = gestures.stepLift(scene.hover);
       const fonts = {
-        chip: renderer.font(11, colors.bodyFont, '600', dpr),
-        badge: renderer.font(12, colors.bodyFont, '600', dpr),
+        chip: renderer.font(11, colors.bodyFont, "600", dpr),
+        badge: renderer.font(12, colors.bodyFont, "600", dpr),
       };
       const items = buildScene({
         felt: scene.felt,
@@ -87,13 +87,13 @@ export function FeltCanvas({ felt, apply, canvasRef, gestures, className, emptyL
   });
 
   return (
-    <div className={`relative overflow-hidden rounded-xl border border-line${className ? ` ${className}` : ''}`}>
+    <div className={`relative overflow-hidden rounded-xl border border-line${className ? ` ${className}` : ""}`}>
       <canvas
         ref={canvasRef}
         className="pov-felt absolute inset-0 h-full w-full"
         style={{
-          cursor: gestures.drag ? 'grabbing' : gestures.hover ? 'grab' : 'default',
-          touchAction: 'none',
+          cursor: gestures.drag ? "grabbing" : gestures.hover ? "grab" : "default",
+          touchAction: "none",
         }}
         {...gestures.canvasHandlers}
       />

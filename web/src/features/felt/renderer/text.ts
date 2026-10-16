@@ -5,7 +5,7 @@
 // rasterized at `scale`× (devicePixelRatio) for sharpness. Only the alpha
 // channel is sampled, so glyphs are drawn white.
 
-import type { GlyphItem, RGB } from './primitives';
+import type { GlyphItem, RGB } from "./primitives";
 
 export type Glyph = {
   u0: number;
@@ -40,22 +40,22 @@ export class GlyphAtlas {
   private penX = 0;
   private penY = 0;
   private rowH = 0;
-  private weight = '600';
-  private family = '';
+  private weight = "600";
+  private family = "";
   private dirty = false;
 
   constructor(gl: WebGL2RenderingContext) {
     this.gl = gl;
-    this.canvas = document.createElement('canvas');
+    this.canvas = document.createElement("canvas");
     this.canvas.width = this.canvas.height = ATLAS_SIZE;
-    const ctx = this.canvas.getContext('2d');
+    const ctx = this.canvas.getContext("2d");
     if (!ctx) {
-      throw new Error('atlas: 2d context unavailable');
+      throw new Error("atlas: 2d context unavailable");
     }
     this.ctx = ctx;
     const texture = gl.createTexture();
     if (!texture) {
-      throw new Error('atlas: texture allocation failed');
+      throw new Error("atlas: texture allocation failed");
     }
     this.texture = texture;
     gl.bindTexture(gl.TEXTURE_2D, texture);
@@ -89,7 +89,7 @@ export class GlyphAtlas {
           const g = this.glyph(px, ch, scale);
           if (g.w > 0 && g.h > 0) {
             items.push({
-              kind: 'glyph',
+              kind: "glyph",
               x: x + pen + g.dx,
               y: y + g.dy,
               w: g.w,
@@ -201,9 +201,9 @@ export class GlyphAtlas {
   // Full text state on every use — resizing the canvas (grow) resets it.
   private setTextState(rasterPx: number) {
     this.ctx.font = `${this.weight} ${rasterPx}px ${this.family}`;
-    this.ctx.textAlign = 'left';
-    this.ctx.textBaseline = 'middle';
-    this.ctx.fillStyle = '#fff';
+    this.ctx.textAlign = "left";
+    this.ctx.textBaseline = "middle";
+    this.ctx.fillStyle = "#fff";
   }
 
   // Double the atlas and re-rasterize everything placed so far.

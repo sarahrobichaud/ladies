@@ -18,20 +18,20 @@
 
 :root {
   /* retro (default): Fraunces headings + Jost body, loaded in index.html */
-  --heading-font: 'Fraunces', 'Iowan Old Style', Georgia, serif;
-  --body-font: 'Jost', 'Avenir Next', 'Century Gothic', system-ui, sans-serif;
-  --mono-font: ui-monospace, 'Cascadia Code', 'SF Mono', Menlo, monospace;
+  --heading-font: "Fraunces", "Iowan Old Style", Georgia, serif;
+  --body-font: "Jost", "Avenir Next", "Century Gothic", system-ui, sans-serif;
+  --mono-font: ui-monospace, "Cascadia Code", "SF Mono", Menlo, monospace;
 }
 
 /* clean: retro serif headings over the platform UI font */
-[data-font='clean'] {
-  --body-font: system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+[data-font="clean"] {
+  --body-font: system-ui, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
 }
 
 /* classic: no webfonts at all */
-[data-font='classic'] {
-  --heading-font: Georgia, 'Times New Roman', serif;
-  --body-font: system-ui, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+[data-font="classic"] {
+  --heading-font: Georgia, "Times New Roman", serif;
+  --body-font: system-ui, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
 }
 
 /* ---------------------------------------------------------------------------
@@ -67,7 +67,7 @@
   --table-shadow: 0 10px 24px rgb(36 48 60 / 0.18); /* rail drop shadow */
 }
 
-:root[data-theme='dark'] {
+:root[data-theme="dark"] {
   color-scheme: dark;
 
   --canvas: #0f1720;
@@ -98,7 +98,7 @@
 
 /* Follow the system until an explicit choice is made. */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']):not([data-theme='dark']) {
+  :root:not([data-theme="light"]):not([data-theme="dark"]) {
     color-scheme: dark;
 
     --canvas: #0f1720;
@@ -162,7 +162,7 @@
 }
 
 /* `dark:` utilities follow the explicit data-theme attribute. */
-@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
 
 /* ---------------------------------------------------------------------------
  * Base
@@ -212,12 +212,7 @@
 }
 
 .table-felt {
-  background: radial-gradient(
-    ellipse 62% 58% at 50% 44%,
-    var(--felt) 0%,
-    var(--felt) 55%,
-    var(--felt-deep) 100%
-  );
+  background: radial-gradient(ellipse 62% 58% at 50% 44%, var(--felt) 0%, var(--felt) 55%, var(--felt-deep) 100%);
   border: 2px dashed color-mix(in srgb, var(--on-felt) 28%, transparent);
   box-shadow: inset 0 0 44px var(--felt-vignette);
 }
@@ -225,12 +220,7 @@
 /* First-person strip at the bottom of the table page: the felt as seen
    from your seat, lit from the table side (top). */
 .pov-felt {
-  background: radial-gradient(
-    ellipse 120% 90% at 50% -30%,
-    var(--felt) 0%,
-    var(--felt) 50%,
-    var(--felt-deep) 100%
-  );
+  background: radial-gradient(ellipse 120% 90% at 50% -30%, var(--felt) 0%, var(--felt) 50%, var(--felt-deep) 100%);
   box-shadow: inset 0 6px 30px var(--felt-vignette);
 }
 
@@ -257,7 +247,7 @@
 }
 
 .poker-chip::before {
-  content: '';
+  content: "";
   position: absolute;
   inset: 15%;
   border-radius: 9999px;

@@ -1,5 +1,5 @@
-import { CHIP_RADIUS, SLOT_ROW_HEIGHT, SLOT_SPACING } from './world';
-import type { Point, Size } from './geom';
+import type { Point, Size } from "./geom";
+import { CHIP_RADIUS, SLOT_ROW_HEIGHT, SLOT_SPACING } from "./world";
 
 /** Staggered slot lattice; odd rows offset half a spacing so slots align on diagonals. */
 
@@ -25,12 +25,7 @@ export function slotPosition(slot: Slot): Point {
  */
 export function isInBounds(slot: Slot, felt: Size): boolean {
   const { x, y } = slotPosition(slot);
-  return (
-    x >= CHIP_RADIUS &&
-    x <= felt.w - CHIP_RADIUS &&
-    y >= CHIP_RADIUS &&
-    y <= felt.h - CHIP_RADIUS
-  );
+  return x >= CHIP_RADIUS && x <= felt.w - CHIP_RADIUS && y >= CHIP_RADIUS && y <= felt.h - CHIP_RADIUS;
 }
 
 /**

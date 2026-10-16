@@ -1,13 +1,13 @@
-import { useState } from 'react';
-import { formatChips } from '../snapshot';
-import type { HandSnapshot } from '../snapshot';
+import { useState } from "react";
+import type { HandSnapshot } from "../snapshot";
+import { formatChips } from "../snapshot";
 
-export type ActionKind = 'fold' | 'check' | 'call' | 'raise' | 'all-in';
+export type ActionKind = "fold" | "check" | "call" | "raise" | "all-in";
 
 const neutralButton =
-  'rounded-md border border-line bg-raised px-4 py-2 text-sm font-medium text-ink hover:bg-blue-tint disabled:cursor-not-allowed disabled:opacity-40';
+  "rounded-md border border-line bg-raised px-4 py-2 text-sm font-medium text-ink hover:bg-blue-tint disabled:cursor-not-allowed disabled:opacity-40";
 const primaryButton =
-  'rounded-md bg-blue px-4 py-2 text-sm font-medium text-canvas hover:bg-blue-strong disabled:cursor-not-allowed disabled:opacity-40';
+  "rounded-md bg-blue px-4 py-2 text-sm font-medium text-canvas hover:bg-blue-strong disabled:cursor-not-allowed disabled:opacity-40";
 
 // Parse a chip amount from draft text, or null while empty/partial.
 function parseChips(text: string): bigint | null {
@@ -51,15 +51,15 @@ export function ActionMenu({
       </p>
 
       <div className="mt-4 grid grid-cols-2 gap-2">
-        <button type="button" className={neutralButton} onClick={() => onAct('fold')}>
+        <button type="button" className={neutralButton} onClick={() => onAct("fold")}>
           Fold
         </button>
         {facingBet ? (
-          <button type="button" className={primaryButton} onClick={() => onAct('call')}>
+          <button type="button" className={primaryButton} onClick={() => onAct("call")}>
             Call {formatChips(callAmount)}
           </button>
         ) : (
-          <button type="button" className={neutralButton} onClick={() => onAct('check')}>
+          <button type="button" className={neutralButton} onClick={() => onAct("check")}>
             Check
           </button>
         )}
@@ -82,7 +82,7 @@ export function ActionMenu({
               type="button"
               className={primaryButton}
               disabled={!raiseLegal}
-              onClick={() => raiseLegal && onAct('raise', raiseTo)}
+              onClick={() => raiseLegal && onAct("raise", raiseTo)}
             >
               Raise
             </button>
@@ -96,7 +96,7 @@ export function ActionMenu({
       <button
         type="button"
         className="mt-4 w-full rounded-md bg-orange px-4 py-2 text-sm font-medium text-canvas hover:bg-orange-strong disabled:cursor-not-allowed disabled:opacity-40"
-        onClick={() => onAct('all-in')}
+        onClick={() => onAct("all-in")}
       >
         All-in
       </button>

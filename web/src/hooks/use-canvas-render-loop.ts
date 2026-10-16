@@ -1,6 +1,6 @@
-import { useEffect, useRef } from 'react';
-import type { RefObject } from 'react';
-import { useLatestRef } from './use-latest-ref';
+import type { RefObject } from "react";
+import { useEffect, useRef } from "react";
+import { useLatestRef } from "./use-latest-ref";
 
 /** A width/height in CSS px. */
 export type CanvasSize = { w: number; h: number };
@@ -19,10 +19,7 @@ type Options = {
  * @param canvasRef - ref to the canvas element
  * @param options - resize callback and per-frame draw callback
  */
-export function useCanvasRenderLoop(
-  canvasRef: RefObject<HTMLCanvasElement | null>,
-  options: Options,
-) {
+export function useCanvasRenderLoop(canvasRef: RefObject<HTMLCanvasElement | null>, options: Options) {
   const dprRef = useRef(1);
   const optionsRef = useLatestRef(options);
 

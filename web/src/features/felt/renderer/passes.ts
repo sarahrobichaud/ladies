@@ -3,24 +3,13 @@
 // primitive means adding one spec here; stride is derived from the
 // attributes, so the old four-table sync hazard is gone.
 
-import type { InstanceAttr } from './gl';
-import type { ChipItem, GlyphItem, PanelItem, RingItem, SceneItem, WallItem } from './primitives';
-import {
-  CHIP_FS,
-  CHIP_VS,
-  PANEL_FS,
-  PANEL_VS,
-  RING_FS,
-  RING_VS,
-  TEXT_FS,
-  TEXT_VS,
-  WALL_FS,
-  WALL_VS,
-} from './shaders';
-import { CHIP_RADIUS, CHIP_SQUASH } from '../world';
+import { CHIP_RADIUS, CHIP_SQUASH } from "../world";
+import type { InstanceAttr } from "./gl";
+import type { ChipItem, GlyphItem, PanelItem, RingItem, SceneItem, WallItem } from "./primitives";
+import { CHIP_FS, CHIP_VS, PANEL_FS, PANEL_VS, RING_FS, RING_VS, TEXT_FS, TEXT_VS, WALL_FS, WALL_VS } from "./shaders";
 
 /** The primitive kinds a scene can contain. */
-export type Kind = SceneItem['kind'];
+export type Kind = SceneItem["kind"];
 
 /** Total instance floats for an attribute layout. */
 function attrStride(attrs: InstanceAttr[]): number {
@@ -50,14 +39,14 @@ const CHIP_EY = (CHIP_RADIUS + CHIP_AA_MARGIN) * CHIP_SQUASH + 1.5;
 // --- ring ----------------------------------------------------------------------
 
 const RING_ATTRS: InstanceAttr[] = [
-  { name: 'iCenter', size: 2 },
-  { name: 'iExtent', size: 2 },
-  { name: 'iRadii', size: 2 },
-  { name: 'iHalfWidth', size: 1 },
-  { name: 'iDash', size: 2 },
-  { name: 'iSoft', size: 1 },
-  { name: 'iStroke', size: 4 },
-  { name: 'iFill', size: 4 },
+  { name: "iCenter", size: 2 },
+  { name: "iExtent", size: 2 },
+  { name: "iRadii", size: 2 },
+  { name: "iHalfWidth", size: 1 },
+  { name: "iDash", size: 2 },
+  { name: "iSoft", size: 1 },
+  { name: "iStroke", size: 4 },
+  { name: "iFill", size: 4 },
 ];
 const RING_STRIDE = attrStride(RING_ATTRS);
 
@@ -84,13 +73,13 @@ function packRing(item: SceneItem, out: Float32Array, o: number): number {
 // --- chip ----------------------------------------------------------------------
 
 const CHIP_ATTRS: InstanceAttr[] = [
-  { name: 'iCenter', size: 2 },
-  { name: 'iExtent', size: 2 },
-  { name: 'iFace', size: 3 },
-  { name: 'iSpot', size: 3 },
-  { name: 'iDim', size: 1 },
-  { name: 'iHighlight', size: 4 },
-  { name: 'iAngle', size: 1 },
+  { name: "iCenter", size: 2 },
+  { name: "iExtent", size: 2 },
+  { name: "iFace", size: 3 },
+  { name: "iSpot", size: 3 },
+  { name: "iDim", size: 1 },
+  { name: "iHighlight", size: 4 },
+  { name: "iAngle", size: 1 },
 ];
 const CHIP_STRIDE = attrStride(CHIP_ATTRS);
 
@@ -113,13 +102,13 @@ function packChip(item: SceneItem, out: Float32Array, o: number): number {
 // --- wall ----------------------------------------------------------------------
 
 const WALL_ATTRS: InstanceAttr[] = [
-  { name: 'iCenter', size: 2 },
-  { name: 'iExtent', size: 2 },
-  { name: 'iFace', size: 3 },
-  { name: 'iSpot', size: 3 },
-  { name: 'iDim', size: 1 },
-  { name: 'iThick', size: 1 },
-  { name: 'iAngle', size: 1 },
+  { name: "iCenter", size: 2 },
+  { name: "iExtent", size: 2 },
+  { name: "iFace", size: 3 },
+  { name: "iSpot", size: 3 },
+  { name: "iDim", size: 1 },
+  { name: "iThick", size: 1 },
+  { name: "iAngle", size: 1 },
 ];
 const WALL_STRIDE = attrStride(WALL_ATTRS);
 
@@ -144,12 +133,12 @@ function packWall(item: SceneItem, out: Float32Array, o: number): number {
 // --- panel ----------------------------------------------------------------------
 
 const PANEL_ATTRS: InstanceAttr[] = [
-  { name: 'iCenter', size: 2 },
-  { name: 'iExtent', size: 2 },
-  { name: 'iHalfSize', size: 2 },
-  { name: 'iRadius', size: 1 },
-  { name: 'iFill', size: 4 },
-  { name: 'iStroke', size: 4 },
+  { name: "iCenter", size: 2 },
+  { name: "iExtent", size: 2 },
+  { name: "iHalfSize", size: 2 },
+  { name: "iRadius", size: 1 },
+  { name: "iFill", size: 4 },
+  { name: "iStroke", size: 4 },
 ];
 const PANEL_STRIDE = attrStride(PANEL_ATTRS);
 
@@ -173,10 +162,10 @@ function packPanel(item: SceneItem, out: Float32Array, o: number): number {
 // --- glyph ----------------------------------------------------------------------
 
 const TEXT_ATTRS: InstanceAttr[] = [
-  { name: 'iPos', size: 2 },
-  { name: 'iSize', size: 2 },
-  { name: 'iUV', size: 4 },
-  { name: 'iColor', size: 3 },
+  { name: "iPos", size: 2 },
+  { name: "iSize", size: 2 },
+  { name: "iUV", size: 4 },
+  { name: "iColor", size: 3 },
 ];
 const TEXT_STRIDE = attrStride(TEXT_ATTRS);
 

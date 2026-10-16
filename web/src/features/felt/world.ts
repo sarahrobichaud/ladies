@@ -1,4 +1,4 @@
-import { CHIP_SIZE } from '../chips/chip';
+import { CHIP_SIZE } from "../chips/chip";
 
 /** Chip face radius in CSS px — the single world-scale knob, derived from the DOM chip's size. */
 export const CHIP_RADIUS = CHIP_SIZE / 2;

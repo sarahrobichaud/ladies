@@ -5,7 +5,7 @@ export type RGBA = readonly [number, number, number, number];
 
 /** Dashed or solid ellipse ring; dash [0, 0] means solid, fill null means outline-only. */
 export type RingItem = {
-  kind: 'ring';
+  kind: "ring";
   x: number;
   y: number;
   rx: number;
@@ -19,7 +19,7 @@ export type RingItem = {
 
 /** Chip face: a squashed SDF disc with edge spots, inner ring, rim, and optional highlight. */
 export type ChipItem = {
-  kind: 'chip';
+  kind: "chip";
   x: number;
   y: number;
   face: RGB;
@@ -31,7 +31,7 @@ export type ChipItem = {
 
 /** Chip wall: the cylinder side under a face, with stripes, shading, and a base groove. */
 export type WallItem = {
-  kind: 'wall';
+  kind: "wall";
   x: number;
   y: number;
   face: RGB;
@@ -43,7 +43,7 @@ export type WallItem = {
 
 /** Rounded-rect panel, used for the hover value badge. */
 export type PanelItem = {
-  kind: 'panel';
+  kind: "panel";
   x: number;
   y: number;
   hw: number;
@@ -55,7 +55,7 @@ export type PanelItem = {
 
 /** One glyph quad sampled from the text atlas. */
 export type GlyphItem = {
-  kind: 'glyph';
+  kind: "glyph";
   x: number;
   y: number;
   w: number;

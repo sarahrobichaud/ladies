@@ -1,9 +1,8 @@
-import { CHIP_TIER_VARS } from '../../chips/palette';
-import type { RGB } from './primitives';
-
+import { CHIP_TIER_VARS } from "../../chips/palette";
+import type { RGB } from "./primitives";
 
 /** Off-DOM element the browser parses colors through. */
-const colorProbe = document.createElement('span');
+const colorProbe = document.createElement("span");
 
 /** The color tokens the scene needs, resolved from the active theme. */
 export type SceneColors = {
@@ -34,14 +33,14 @@ export function resolveSceneColors(): SceneColors {
 
   return {
     tiers,
-    onFelt: token('--on-felt'),
-    canvasBg: token('--canvas'),
-    line: token('--line'),
-    ink: token('--ink'),
-    orange: token('--orange'),
-    orangeTint: token('--orange-tint'),
-    blue: token('--blue'),
-    bodyFont: style.getPropertyValue('--body-font').trim(),
+    onFelt: token("--on-felt"),
+    canvasBg: token("--canvas"),
+    line: token("--line"),
+    ink: token("--ink"),
+    orange: token("--orange"),
+    orangeTint: token("--orange-tint"),
+    blue: token("--blue"),
+    bodyFont: style.getPropertyValue("--body-font").trim(),
   };
 }
 
@@ -53,7 +52,7 @@ export function resolveSceneColors(): SceneColors {
 function parseColor(color: string): RGB {
   // The browser normalizes any valid CSS color to a canonical rgb()
   // string, or leaves the style empty when the value is invalid.
-  colorProbe.style.color = '';
+  colorProbe.style.color = "";
   colorProbe.style.color = color.trim();
 
   const match = colorProbe.style.color.match(/rgba?\(([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)/);

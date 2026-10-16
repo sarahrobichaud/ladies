@@ -1,6 +1,6 @@
-import { Chip } from '../chips/chip';
-import type { Catalog, KindId } from '../chips/types';
-import type { TrayHandlers } from './hooks/use-felt-gestures';
+import { Chip } from "../chips/chip";
+import type { Catalog, KindId } from "../chips/types";
+import type { TrayHandlers } from "./hooks/use-felt-gestures";
 
 type ChipTrayProps = {
   catalog: Catalog;
@@ -14,7 +14,7 @@ export function ChipTray({ catalog, trayHandlers }: ChipTrayProps) {
     <div className="flex w-36 shrink-0 flex-col gap-2 rounded-xl border border-line bg-surface p-3 shadow-lg">
       <p className="text-[10px] uppercase tracking-wide text-muted">Tray</p>
       {catalog.map((kind, kindId) => (
-        <div key={kindId} className="draggable cursor-grab self-start" {...trayHandlers(kindId)}>
+        <div key={kind.value.toString()} className="draggable cursor-grab self-start" {...trayHandlers(kindId)}>
           <Chip value={kind.value} tier={kind.tier} />
         </div>
       ))}

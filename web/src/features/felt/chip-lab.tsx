@@ -1,18 +1,18 @@
-import { useRef, useState } from 'react';
-import { Link } from 'react-router';
-import { Chip } from '../chips/chip';
-import { CATALOG } from '../chips/catalog';
-import { chipLabel, formatChips } from '../../snapshot';
-import { parseRuns } from '../chips/notation';
-import { coalesce } from '../chips/runs';
-import type { Catalog, Run } from '../chips/types';
-import { nearestFreeSlot } from './interaction';
-import { allSlots } from './lattice';
-import { STACK_CAPACITY, clearBoard, spawnStack, totalValue } from './felt';
-import { useFelt } from './hooks/use-felt';
-import { useFeltGestures } from './hooks/use-felt-gestures';
-import { ChipTray } from './chip-tray';
-import { FeltCanvas } from './felt-canvas';
+import { useRef, useState } from "react";
+import { Link } from "react-router";
+import { chipLabel, formatChips } from "../../snapshot";
+import { CATALOG } from "../chips/catalog";
+import { Chip } from "../chips/chip";
+import { parseRuns } from "../chips/notation";
+import { coalesce } from "../chips/runs";
+import type { Catalog, Run } from "../chips/types";
+import { ChipTray } from "./chip-tray";
+import { clearBoard, STACK_CAPACITY, spawnStack, totalValue } from "./felt";
+import { FeltCanvas } from "./felt-canvas";
+import { useFelt } from "./hooks/use-felt";
+import { useFeltGestures } from "./hooks/use-felt-gestures";
+import { nearestFreeSlot } from "./interaction";
+import { allSlots } from "./lattice";
 
 // A random canonical stack: 1..STACK_CAPACITY chips split into runs of
 // random denominations. coalesce merges adjacent same-kind runs.
@@ -33,7 +33,7 @@ export function ChipLab() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const { felt, apply } = useFelt(CATALOG);
   const gestures = useFeltGestures({ felt, apply, canvasRef });
-  const [notation, setNotation] = useState('');
+  const [notation, setNotation] = useState("");
   const [notationError, setNotationError] = useState<string | null>(null);
 
   const total = totalValue(felt);
@@ -59,11 +59,11 @@ export function ChipLab() {
       const runs = parseRuns(notation, felt.catalog);
       const slot = nearestFreeSlot(felt, felt.felt.w / 2, felt.felt.h / 2);
       if (!slot) {
-        setNotationError('the felt is full');
+        setNotationError("the felt is full");
         return;
       }
       apply((f) => spawnStack(f, runs, slot));
-      setNotation('');
+      setNotation("");
       setNotationError(null);
     } catch (err) {
       setNotationError(err instanceof Error ? err.message : String(err));
@@ -76,8 +76,7 @@ export function ChipLab() {
         <div>
           <h1 className="text-lg text-ink">Chip lab</h1>
           <p className="text-sm text-muted">
-            Stacks are compressed entities — grab the top, split lower, wheel-size, combine on
-            tops.
+            Stacks are compressed entities — grab the top, split lower, wheel-size, combine on tops.
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -125,17 +124,16 @@ export function ChipLab() {
 
       {/* Specimen strip: every palette tier, for component reference */}
       <div className="flex items-center gap-4 rounded-xl border border-line bg-surface p-3 shadow-lg">
-        {felt.catalog.map((kind, kindId) => (
-          <div key={kindId} className="flex flex-col items-center gap-1">
+        {felt.catalog.map((kind) => (
+          <div key={kind.value.toString()} className="flex flex-col items-center gap-1">
             <Chip value={kind.value} tier={kind.tier} />
             <span className="text-[10px] text-muted">{chipLabel(kind.value)}</span>
           </div>
         ))}
         <p className="ml-auto max-w-56 text-xs leading-relaxed text-muted">
-          Press a tray chip to place one, or drag it straight onto the felt. Chips land on the
-          slots — lower a stack onto another stack's top to combine; occupied slots are skipped,
-          and dropping off the felt takes chips back. Right-click carries a whole stack; scroll
-          while holding one to size it (max {STACK_CAPACITY}).
+          Press a tray chip to place one, or drag it straight onto the felt. Chips land on the slots — lower a stack
+          onto another stack's top to combine; occupied slots are skipped, and dropping off the felt takes chips back.
+          Right-click carries a whole stack; scroll while holding one to size it (max {STACK_CAPACITY}).
         </p>
       </div>
 

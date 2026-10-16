@@ -6,20 +6,18 @@
 export type TierVars = { face: string; spot: string; text: string };
 
 export const CHIP_TIER_VARS: TierVars[] = [
-  { face: '--raised', spot: '--muted', text: '--ink' },
-  { face: '--orange', spot: '--canvas', text: '--canvas' },
-  { face: '--felt-deep', spot: '--on-felt', text: '--on-felt' },
-  { face: '--ink', spot: '--canvas', text: '--canvas' },
-  { face: '--blue', spot: '--canvas', text: '--canvas' },
-  { face: '--wood-light', spot: '--canvas', text: '--ink' },
+  { face: "--raised", spot: "--muted", text: "--ink" },
+  { face: "--orange", spot: "--canvas", text: "--canvas" },
+  { face: "--felt-deep", spot: "--on-felt", text: "--on-felt" },
+  { face: "--ink", spot: "--canvas", text: "--canvas" },
+  { face: "--blue", spot: "--canvas", text: "--canvas" },
+  { face: "--wood-light", spot: "--canvas", text: "--ink" },
 ];
 
-export const CHIP_TIERS: { face: string; spot: string; text: string }[] = CHIP_TIER_VARS.map(
-  (tier) => {
-    return {
-      face: `var(${tier.face})`,
-      spot: `var(${tier.spot})`,
-      text: `var(${tier.text})`,
-    };
-  },
-);
+export const CHIP_TIERS: { face: string; spot: string; text: string }[] = CHIP_TIER_VARS.map((tier) => {
+  return {
+    face: `var(${tier.face})`,
+    spot: `var(${tier.spot})`,
+    text: `var(${tier.text})`,
+  };
+});

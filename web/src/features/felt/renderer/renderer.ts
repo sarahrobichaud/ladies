@@ -1,18 +1,11 @@
 // The render front: takes an ordered scene (painter's order) and flushes
 // consecutive same-kind runs as instanced draws, one pass per kind.
 
-import { Batch, createGL, createProgram } from './gl';
-import {
-  CHIP_RADIUS,
-  CHIP_SQUASH,
-  SPOT_HALF_WIDTH,
-  SPOT_INNER_RADIUS,
-  INNER_RING_RADIUS,
-  INNER_DASH,
-} from '../world';
-import type { SceneItem } from './primitives';
-import { PASS_SPECS, type Kind, type PassSpec } from './passes';
-import { GlyphAtlas, type FontFace } from './text';
+import { CHIP_RADIUS, CHIP_SQUASH, INNER_DASH, INNER_RING_RADIUS, SPOT_HALF_WIDTH, SPOT_INNER_RADIUS } from "../world";
+import { Batch, createGL, createProgram } from "./gl";
+import { type Kind, PASS_SPECS, type PassSpec } from "./passes";
+import type { SceneItem } from "./primitives";
+import { type FontFace, GlyphAtlas } from "./text";
 
 /** One compiled pass: its spec, program, instance batch, and cached uniform location. */
 type Pass = {
@@ -45,12 +38,12 @@ function initWorldUniforms(gl: WebGL2RenderingContext, program: WebGLProgram) {
     }
   };
 
-  scalar('uChipRadius', CHIP_RADIUS);
-  scalar('uSquash', CHIP_SQUASH);
-  scalar('uSpotHalfWidth', SPOT_HALF_WIDTH);
-  scalar('uSpotInnerRadius', SPOT_INNER_RADIUS);
-  scalar('uInnerRingRadius', INNER_RING_RADIUS);
-  pair('uInnerDash', INNER_DASH[0], INNER_DASH[1]);
+  scalar("uChipRadius", CHIP_RADIUS);
+  scalar("uSquash", CHIP_SQUASH);
+  scalar("uSpotHalfWidth", SPOT_HALF_WIDTH);
+  scalar("uSpotInnerRadius", SPOT_INNER_RADIUS);
+  scalar("uInnerRingRadius", INNER_RING_RADIUS);
+  pair("uInnerDash", INNER_DASH[0], INNER_DASH[1]);
 }
 
 /**
@@ -66,7 +59,7 @@ function buildPass(gl: WebGL2RenderingContext, spec: PassSpec): Pass {
     spec,
     program,
     batch: new Batch(gl, program, spec.attrs),
-    uResolution: gl.getUniformLocation(program, 'uResolution'),
+    uResolution: gl.getUniformLocation(program, "uResolution"),
   };
 }
 
@@ -110,7 +103,7 @@ class Renderer {
     // The atlas sampler is a fixed unit; bind it to texture slot 0 once.
     const text = this.passes.glyph.program;
     gl.useProgram(text);
-    gl.uniform1i(gl.getUniformLocation(text, 'uAtlas'), 0);
+    gl.uniform1i(gl.getUniformLocation(text, "uAtlas"), 0);
 
     this.scratch = {
       ring: new Float32Array(SCRATCH_INSTANCES * PASS_SPECS.ring.stride),
@@ -203,7 +196,7 @@ class Renderer {
       gl.uniform2f(pass.uResolution, this.cssW, this.cssH);
     }
 
-    if (kind === 'glyph') {
+    if (kind === "glyph") {
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, this.atlas.texture);
     }
@@ -232,7 +225,7 @@ export function createPrimitiveRenderer(canvas: HTMLCanvasElement): PrimitiveRen
 
   const renderer = new Renderer(gl, canvas);
   return {
-    font: (px, family, weight = '600', scale = 1) => renderer.atlas.font(px, family, weight, scale),
+    font: (px, family, weight = "600", scale = 1) => renderer.atlas.font(px, family, weight, scale),
     render: (scene, w, h) => renderer.render(scene, w, h),
     dispose: () => renderer.dispose(),
   };

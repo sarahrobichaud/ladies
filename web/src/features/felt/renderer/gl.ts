@@ -16,7 +16,7 @@ const CONTEXT_ATTRS: WebGLContextAttributes = {
  * @returns the context, or null when WebGL2 is unavailable
  */
 export function createGL(canvas: HTMLCanvasElement): WebGL2RenderingContext | null {
-  return canvas.getContext('webgl2', CONTEXT_ATTRS);
+  return canvas.getContext("webgl2", CONTEXT_ATTRS);
 }
 
 /**
@@ -29,7 +29,7 @@ export function createGL(canvas: HTMLCanvasElement): WebGL2RenderingContext | nu
 function compile(gl: WebGL2RenderingContext, type: number, source: string): WebGLShader {
   const shader = gl.createShader(type);
   if (!shader) {
-    throw new Error('webgl: shader allocation failed');
+    throw new Error("webgl: shader allocation failed");
   }
 
   gl.shaderSource(shader, source);
@@ -55,7 +55,7 @@ function compile(gl: WebGL2RenderingContext, type: number, source: string): WebG
 export function createProgram(gl: WebGL2RenderingContext, vs: string, fs: string): WebGLProgram {
   const program = gl.createProgram();
   if (!program) {
-    throw new Error('webgl: program allocation failed');
+    throw new Error("webgl: program allocation failed");
   }
 
   const vertex = compile(gl, gl.VERTEX_SHADER, vs);
@@ -102,12 +102,12 @@ export function createQuadVAO(
 ): WebGLVertexArrayObject {
   const vao = gl.createVertexArray();
   if (!vao) {
-    throw new Error('webgl: VAO allocation failed');
+    throw new Error("webgl: VAO allocation failed");
   }
 
   const quad = gl.createBuffer();
   if (!quad) {
-    throw new Error('webgl: buffer allocation failed');
+    throw new Error("webgl: buffer allocation failed");
   }
 
   gl.bindVertexArray(vao);
@@ -115,7 +115,7 @@ export function createQuadVAO(
   // Stream 0: the unit quad, one corner per vertex.
   gl.bindBuffer(gl.ARRAY_BUFFER, quad);
   gl.bufferData(gl.ARRAY_BUFFER, UNIT_QUAD, gl.STATIC_DRAW);
-  const corner = gl.getAttribLocation(program, 'aCorner');
+  const corner = gl.getAttribLocation(program, "aCorner");
   gl.enableVertexAttribArray(corner);
   gl.vertexAttribPointer(corner, 2, gl.FLOAT, false, 0, 0);
 
@@ -159,18 +159,13 @@ export class Batch {
    * @param capacityInstances - initial buffer capacity, in instances
    * @throws Error on buffer or VAO allocation failure
    */
-  constructor(
-    gl: WebGL2RenderingContext,
-    program: WebGLProgram,
-    attrs: InstanceAttr[],
-    capacityInstances = 256,
-  ) {
+  constructor(gl: WebGL2RenderingContext, program: WebGLProgram, attrs: InstanceAttr[], capacityInstances = 256) {
     this.gl = gl;
     this.instanceFloats = attrs.reduce((n, a) => n + a.size, 0);
 
     const buffer = gl.createBuffer();
     if (!buffer) {
-      throw new Error('webgl: buffer allocation failed');
+      throw new Error("webgl: buffer allocation failed");
     }
     this.buffer = buffer;
 
