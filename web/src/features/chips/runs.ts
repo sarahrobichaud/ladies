@@ -10,7 +10,9 @@ export function coalesce(runs: Run[]): Run[] {
 
   for (const run of runs) {
     const isEmpty = run.count <= 0;
-    if (isEmpty) continue;
+    if (isEmpty) {
+      continue;
+    }
 
     const previous = canonical[canonical.length - 1];
     const mergesWithPrevious = previous !== undefined && previous.kind === run.kind;

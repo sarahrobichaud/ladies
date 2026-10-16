@@ -70,13 +70,17 @@ function SessionConfigCard({ disabled, onStart }: { disabled: boolean; onStart: 
   const updateChips = (text: string) => {
     setChipsText(text);
     const parsed = parseCount(text);
-    if (parsed !== null) setChips(parsed);
+    if (parsed !== null) {
+      setChips(parsed);
+    }
   };
 
   const updateSmall = (text: string) => {
     setSmallText(text);
     const parsed = parseCount(text);
-    if (parsed !== null) setSmallBlind(parsed);
+    if (parsed !== null) {
+      setSmallBlind(parsed);
+    }
   };
 
   return (

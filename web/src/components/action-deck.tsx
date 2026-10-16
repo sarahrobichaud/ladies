@@ -1,10 +1,10 @@
-import { useRef, useState } from 'react';
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
-import { formatChips } from '../snapshot';
-import type { HandSnapshot, PlayerSnapshot } from '../snapshot';
-import type { ActionKind } from './action-menu';
-import { PlayingCard } from './player-card';
-import { Chip } from '../features/chips/chip';
+import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
+import { useRef, useState } from "react";
+import { Chip } from "../features/chips/chip";
+import type { HandSnapshot, PlayerSnapshot } from "../snapshot";
+import { formatChips } from "../snapshot";
+import type { ActionKind } from "./action-menu";
+import { PlayingCard } from "./player-card";
 
 // Gesture thresholds in px.
 const FOLD_DISTANCE = 90;
@@ -16,23 +16,21 @@ const ALL_IN_TIER = 3;
 type PendingChip = { id: number; value: bigint; tier: number };
 
 type DragSeed =
-  | { kind: 'card'; index: number }
-  | { kind: 'chip'; index: number; value: bigint; tier: number }
-  | { kind: 'stack' }
-  | { kind: 'pending' };
+  | { kind: "card"; index: number }
+  | { kind: "chip"; index: number; value: bigint; tier: number }
+  | { kind: "stack" }
+  | { kind: "pending" };
 
 type DragBase = { pointerId: number; startX: number; startY: number; dx: number; dy: number };
 
 type Drag =
-  | (DragBase & { kind: 'card'; index: number })
-  | (DragBase & { kind: 'chip'; index: number; value: bigint; tier: number; overZone: boolean })
-  | (DragBase & { kind: 'stack'; overZone: boolean; committing: boolean })
-  | (DragBase & { kind: 'pending'; committing: boolean });
+  | (DragBase & { kind: "card"; index: number })
+  | (DragBase & { kind: "chip"; index: number; value: bigint; tier: number; overZone: boolean })
+  | (DragBase & { kind: "stack"; overZone: boolean; committing: boolean })
+  | (DragBase & { kind: "pending"; committing: boolean });
 
 // What committing the chips currently on the line would do.
-type Plan =
-  | { ok: true; kind: ActionKind; raiseTo?: bigint; label: string }
-  | { ok: false; reason: string };
+type Plan = { ok: true; kind: ActionKind; raiseTo?: bigint; label: string } | { ok: false; reason: string };
 
 function commitPlan(
   total: bigint,
@@ -41,46 +39,48 @@ function commitPlan(
   callAmount: bigint,
   minRaiseTo: bigint,
 ): Plan | null {
-  if (total === 0n) return null;
+  if (total === 0n) {
+    return null;
+  }
 
   const target = player.bet + total;
   const maxTo = player.bet + player.stack;
 
   // Everything went in: let the engine decide call/raise/all-in.
   if (target >= maxTo) {
-    return { ok: true, kind: 'all-in', label: `All-in ${formatChips(maxTo)}` };
+    return { ok: true, kind: "all-in", label: `All-in ${formatChips(maxTo)}` };
   }
   if (facingBet && total < callAmount) {
     return { ok: false, reason: `${formatChips(callAmount - total)} short of a call` };
   }
   if (facingBet && total === callAmount) {
-    return { ok: true, kind: 'call', label: `Call ${formatChips(callAmount)}` };
+    return { ok: true, kind: "call", label: `Call ${formatChips(callAmount)}` };
   }
   if (target < minRaiseTo) {
     return { ok: false, reason: `Min is ${formatChips(minRaiseTo)}` };
   }
   if (!player.can_raise) {
-    return { ok: false, reason: 'Betting was not reopened' };
+    return { ok: false, reason: "Betting was not reopened" };
   }
   return {
     ok: true,
-    kind: 'raise',
+    kind: "raise",
     raiseTo: target,
-    label: `${facingBet ? 'Raise to' : 'Bet'} ${formatChips(target)}`,
+    label: `${facingBet ? "Raise to" : "Bet"} ${formatChips(target)}`,
   };
 }
 
 // Transform for a piece while it is / isn't being dragged.
-function dragStyle(active: boolean, dx: number, dy: number, extra = ''): CSSProperties {
+function dragStyle(active: boolean, dx: number, dy: number, extra = ""): CSSProperties {
   if (active) {
     return {
-      transform: `translate(${dx}px, ${dy}px)${extra ? ` ${extra}` : ''}`,
-      transition: 'none',
-      position: 'relative',
+      transform: `translate(${dx}px, ${dy}px)${extra ? ` ${extra}` : ""}`,
+      transition: "none",
+      position: "relative",
       zIndex: 50,
     };
   }
-  return { transition: 'transform 160ms ease' };
+  return { transition: "transform 160ms ease" };
 }
 
 export function ActionDeck({
@@ -93,8 +93,7 @@ export function ActionDeck({
   onAct: (kind: ActionKind, raiseTo?: bigint) => void;
 }) {
   const player = hand.players[hand.to_act];
-  const live =
-    player.needs_action && hand.street !== 'complete' && hand.street !== 'showdown';
+  const live = player.needs_action && hand.street !== "complete" && hand.street !== "showdown";
   const facingBet = hand.current_bet > player.bet;
   const callAmount = facingBet ? hand.current_bet - player.bet : 0n;
 
@@ -124,13 +123,13 @@ export function ActionDeck({
 
   const inZone = (x: number, y: number): boolean => {
     const zone = zoneRef.current?.getBoundingClientRect();
-    return (
-      !!zone && x >= zone.left && x <= zone.right && y >= zone.top && y <= zone.bottom
-    );
+    return !!zone && x >= zone.left && x <= zone.right && y >= zone.top && y <= zone.bottom;
   };
 
   const beginDrag = (e: ReactPointerEvent<HTMLElement>, seed: DragSeed) => {
-    if (!live) return;
+    if (!live) {
+      return;
+    }
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
     setDrag({
@@ -140,21 +139,27 @@ export function ActionDeck({
       startY: e.clientY,
       dx: 0,
       dy: 0,
-      ...(seed.kind === 'chip' || seed.kind === 'stack' ? { overZone: false } : {}),
-      ...(seed.kind === 'stack' ? { committing: false } : {}),
-      ...(seed.kind === 'pending' ? { committing: false } : {}),
+      ...(seed.kind === "chip" || seed.kind === "stack" ? { overZone: false } : {}),
+      ...(seed.kind === "stack" ? { committing: false } : {}),
+      ...(seed.kind === "pending" ? { committing: false } : {}),
     } as Drag);
   };
 
   const moveDrag = (e: ReactPointerEvent<HTMLElement>) => {
     setDrag((d) => {
-      if (!d || d.pointerId !== e.pointerId) return d;
+      if (!d || d.pointerId !== e.pointerId) {
+        return d;
+      }
       const dx = e.clientX - d.startX;
       const dy = e.clientY - d.startY;
-      if (d.kind === 'card') return { ...d, dx, dy };
+      if (d.kind === "card") {
+        return { ...d, dx, dy };
+      }
       const overZone = inZone(e.clientX, e.clientY);
-      if (d.kind === 'chip') return { ...d, dx, dy, overZone };
-      if (d.kind === 'stack') {
+      if (d.kind === "chip") {
+        return { ...d, dx, dy, overZone };
+      }
+      if (d.kind === "stack") {
         return { ...d, dx, dy, overZone, committing: dy < -COMMIT_DISTANCE };
       }
       return { ...d, dx, dy, committing: dy < -COMMIT_DISTANCE };
@@ -164,14 +169,18 @@ export function ActionDeck({
   const cancelDrag = () => setDrag(null);
 
   const endDrag = (e: ReactPointerEvent<HTMLElement>) => {
-    if (!drag || drag.pointerId !== e.pointerId) return;
-    setDrag(null);
-
-    if (drag.kind === 'card') {
-      if (drag.dy >= FOLD_DISTANCE) onAct('fold');
+    if (!drag || drag.pointerId !== e.pointerId) {
       return;
     }
-    if (drag.kind === 'chip' && drag.overZone) {
+    setDrag(null);
+
+    if (drag.kind === "card") {
+      if (drag.dy >= FOLD_DISTANCE) {
+        onAct("fold");
+      }
+      return;
+    }
+    if (drag.kind === "chip" && drag.overZone) {
       const { value, tier } = drag;
       // Can't put more chips on the line than the stack holds.
       if (pendingTotal + value <= player.stack) {
@@ -179,65 +188,63 @@ export function ActionDeck({
       }
       return;
     }
-    if (drag.kind === 'stack') {
-      if (drag.committing) onAct('all-in');
-      else if (drag.overZone) {
+    if (drag.kind === "stack") {
+      if (drag.committing) {
+        onAct("all-in");
+      } else if (drag.overZone) {
         // Shoving replaces whatever is on the line: everything goes in.
         setLine({ epoch, chips: [{ id: nextChipId.current++, value: player.stack, tier: ALL_IN_TIER }] });
       }
       return;
     }
-    if (drag.kind === 'pending' && drag.committing && plan?.ok) {
+    if (drag.kind === "pending" && drag.committing && plan?.ok) {
       onAct(plan.kind, plan.raiseTo);
     }
   };
 
   const commit = () => {
-    if (!plan?.ok) return;
+    if (!plan?.ok) {
+      return;
+    }
     setLine({ epoch, chips: [] });
     onAct(plan.kind, plan.raiseTo);
   };
 
-  const cardDrag = (i: number) =>
-    drag?.kind === 'card' && drag.index === i ? drag : null;
-  const chipDrag = (i: number) =>
-    drag?.kind === 'chip' && drag.index === i ? drag : null;
-  const stackDrag = drag?.kind === 'stack' ? drag : null;
-  const pendingDrag = drag?.kind === 'pending' ? drag : null;
+  const cardDrag = (i: number) => (drag?.kind === "card" && drag.index === i ? drag : null);
+  const chipDrag = (i: number) => (drag?.kind === "chip" && drag.index === i ? drag : null);
+  const stackDrag = drag?.kind === "stack" ? drag : null;
+  const pendingDrag = drag?.kind === "pending" ? drag : null;
 
   const cardHandlers = (i: number) => ({
-    onPointerDown: (e: ReactPointerEvent<HTMLDivElement>) =>
-      beginDrag(e, { kind: 'card', index: i }),
+    onPointerDown: (e: ReactPointerEvent<HTMLDivElement>) => beginDrag(e, { kind: "card", index: i }),
     onPointerMove: moveDrag,
     onPointerUp: endDrag,
     onPointerCancel: cancelDrag,
   });
   const chipHandlers = (i: number, value: bigint, tier: number) => ({
-    onPointerDown: (e: ReactPointerEvent<HTMLDivElement>) =>
-      beginDrag(e, { kind: 'chip', index: i, value, tier }),
+    onPointerDown: (e: ReactPointerEvent<HTMLDivElement>) => beginDrag(e, { kind: "chip", index: i, value, tier }),
     onPointerMove: moveDrag,
     onPointerUp: endDrag,
     onPointerCancel: cancelDrag,
   });
   const stackHandlers = {
-    onPointerDown: (e: ReactPointerEvent<HTMLDivElement>) => beginDrag(e, { kind: 'stack' }),
+    onPointerDown: (e: ReactPointerEvent<HTMLDivElement>) => beginDrag(e, { kind: "stack" }),
     onPointerMove: moveDrag,
     onPointerUp: endDrag,
     onPointerCancel: cancelDrag,
   };
   const pendingHandlers = {
-    onPointerDown: (e: ReactPointerEvent<HTMLDivElement>) => beginDrag(e, { kind: 'pending' }),
+    onPointerDown: (e: ReactPointerEvent<HTMLDivElement>) => beginDrag(e, { kind: "pending" }),
     onPointerMove: moveDrag,
     onPointerUp: endDrag,
     onPointerCancel: cancelDrag,
   };
 
-  const cardFolding = drag?.kind === 'card' && drag.dy >= FOLD_DISTANCE;
-  const stackCommitting =
-    (drag?.kind === 'pending' || drag?.kind === 'stack') && drag.committing;
+  const cardFolding = drag?.kind === "card" && drag.dy >= FOLD_DISTANCE;
+  const stackCommitting = (drag?.kind === "pending" || drag?.kind === "stack") && drag.committing;
 
   const fallbackButton =
-    'rounded-md border border-line bg-raised px-2 py-1.5 text-xs font-medium text-ink hover:bg-blue-tint disabled:cursor-not-allowed disabled:opacity-40';
+    "rounded-md border border-line bg-raised px-2 py-1.5 text-xs font-medium text-ink hover:bg-blue-tint disabled:cursor-not-allowed disabled:opacity-40";
 
   return (
     <div className="grid h-80 shrink-0 grid-cols-[1fr_18rem] gap-4">
@@ -248,49 +255,35 @@ export function ActionDeck({
           {facingBet ? (
             <>
               <Chip value={hand.current_bet} tier={2} size={30} />
-              <p className="text-xs font-medium text-on-felt/85">
-                To call {formatChips(callAmount)}
-              </p>
+              <p className="text-xs font-medium text-on-felt/85">To call {formatChips(callAmount)}</p>
             </>
           ) : (
-            <p className="text-xs text-on-felt/60">
-              {live ? 'No bet to you' : 'Waiting…'}
-            </p>
+            <p className="text-xs text-on-felt/60">{live ? "No bet to you" : "Waiting…"}</p>
           )}
         </div>
 
         {/* Commit band while dragging the line stack or the all-in stack */}
-        {(drag?.kind === 'pending' || drag?.kind === 'stack') && (
+        {(drag?.kind === "pending" || drag?.kind === "stack") && (
           <div
             className={`absolute inset-x-0 top-0 z-20 flex h-14 items-center justify-center border-b-2 border-dashed ${
-              stackCommitting
-                ? 'border-blue bg-blue-tint/60'
-                : 'border-on-felt/40 bg-black/10'
+              stackCommitting ? "border-blue bg-blue-tint/60" : "border-on-felt/40 bg-black/10"
             }`}
           >
-            <span
-              className={`text-sm font-semibold ${
-                stackCommitting ? 'text-blue-strong' : 'text-on-felt/60'
-              }`}
-            >
-              {stackCommitting ? 'Release to commit' : 'Drag up to commit'}
+            <span className={`text-sm font-semibold ${stackCommitting ? "text-blue-strong" : "text-on-felt/60"}`}>
+              {stackCommitting ? "Release to commit" : "Drag up to commit"}
             </span>
           </div>
         )}
 
         {/* Fold band while dragging a hole card */}
-        {drag?.kind === 'card' && (
+        {drag?.kind === "card" && (
           <div
             className={`absolute inset-x-0 bottom-0 z-0 flex h-16 items-center justify-center border-t-2 border-dashed ${
-              cardFolding ? 'border-orange bg-orange-tint/60' : 'border-on-felt/40 bg-black/10'
+              cardFolding ? "border-orange bg-orange-tint/60" : "border-on-felt/40 bg-black/10"
             }`}
           >
-            <span
-              className={`text-sm font-semibold ${
-                cardFolding ? 'text-orange-strong' : 'text-on-felt/60'
-              }`}
-            >
-              {cardFolding ? 'Release to fold' : 'Drag down to fold'}
+            <span className={`text-sm font-semibold ${cardFolding ? "text-orange-strong" : "text-on-felt/60"}`}>
+              {cardFolding ? "Release to fold" : "Drag down to fold"}
             </span>
           </div>
         )}
@@ -300,34 +293,23 @@ export function ActionDeck({
           type="button"
           ref={zoneRef}
           onClick={() => {
-            if (live && !facingBet && pendingTotal === 0n) onAct('check');
+            if (live && !facingBet && pendingTotal === 0n) {
+              onAct("check");
+            }
           }}
           className={`absolute inset-x-16 top-[36%] z-10 flex h-24 items-center justify-center rounded-lg border-2 border-dashed px-3 ${
-            drag?.kind === 'chip' && drag.overZone
-              ? 'border-on-felt bg-white/15'
-              : 'border-on-felt/40'
-          } ${live && !facingBet && pendingTotal === 0n ? 'cursor-pointer' : ''}`}
+            drag?.kind === "chip" && drag.overZone ? "border-on-felt bg-white/15" : "border-on-felt/40"
+          } ${live && !facingBet && pendingTotal === 0n ? "cursor-pointer" : ""}`}
         >
           {pending.length > 0 ? (
             <div
-              className={`draggable cursor-grab${pendingDrag ? ' cursor-grabbing' : ''}`}
-              style={dragStyle(
-                !!pendingDrag,
-                pendingDrag?.dx ?? 0,
-                pendingDrag?.dy ?? 0,
-                'scale(1.05)',
-              )}
+              className={`draggable cursor-grab${pendingDrag ? " cursor-grabbing" : ""}`}
+              style={dragStyle(!!pendingDrag, pendingDrag?.dx ?? 0, pendingDrag?.dy ?? 0, "scale(1.05)")}
               {...pendingHandlers}
             >
               <div className="flex items-center">
                 {pending.map((c, i) => (
-                  <Chip
-                    key={c.id}
-                    value={c.value}
-                    tier={c.tier}
-                    size={36}
-                    className={i > 0 ? '-ml-3' : undefined}
-                  />
+                  <Chip key={c.id} value={c.value} tier={c.tier} size={36} className={i > 0 ? "-ml-3" : undefined} />
                 ))}
               </div>
               <p className="mt-1 text-center text-sm font-bold tabular-nums text-on-felt">
@@ -337,8 +319,8 @@ export function ActionDeck({
           ) : (
             <span className="text-xs text-on-felt/50">
               {facingBet
-                ? 'Betting line — drop chips here to call or raise'
-                : 'Tap here to check · drop chips here to bet'}
+                ? "Betting line — drop chips here to call or raise"
+                : "Tap here to check · drop chips here to bet"}
             </span>
           )}
         </button>
@@ -359,8 +341,8 @@ export function ActionDeck({
                 return (
                   <div
                     key={value.toString()}
-                    className={`draggable ${d ? 'cursor-grabbing' : 'cursor-grab'}`}
-                    style={dragStyle(!!d, d?.dx ?? 0, d?.dy ?? 0, 'scale(1.1)')}
+                    className={`draggable ${d ? "cursor-grabbing" : "cursor-grab"}`}
+                    style={dragStyle(!!d, d?.dx ?? 0, d?.dy ?? 0, "scale(1.1)")}
                     {...chipHandlers(i, value, i)}
                   >
                     <Chip value={value} tier={i} size={44} />
@@ -370,9 +352,7 @@ export function ActionDeck({
 
               {player.stack > 0n && (
                 <div
-                  className={`draggable flex flex-col items-center ${
-                    stackDrag ? 'cursor-grabbing' : 'cursor-grab'
-                  }`}
+                  className={`draggable flex flex-col items-center ${stackDrag ? "cursor-grabbing" : "cursor-grab"}`}
                   style={dragStyle(!!stackDrag, stackDrag?.dx ?? 0, stackDrag?.dy ?? 0)}
                   {...stackHandlers}
                 >
@@ -381,9 +361,7 @@ export function ActionDeck({
                     <Chip value={player.stack} tier={ALL_IN_TIER} size={40} className="-mt-7" />
                     <Chip value={player.stack} tier={ALL_IN_TIER} size={40} className="-mt-7" />
                   </div>
-                  <span className="mt-1 text-[10px] font-bold tracking-widest text-on-felt">
-                    ALL-IN
-                  </span>
+                  <span className="mt-1 text-[10px] font-bold tracking-widest text-on-felt">ALL-IN</span>
                 </div>
               )}
             </div>
@@ -395,13 +373,8 @@ export function ActionDeck({
               return (
                 <div
                   key={`${card.rank}-${card.suit}`}
-                  className={`draggable ${d ? 'cursor-grabbing' : 'cursor-grab'}`}
-                  style={dragStyle(
-                    !!d,
-                    d?.dx ?? 0,
-                    d?.dy ?? 0,
-                    `rotate(${(d?.dx ?? 0) * 0.06}deg) scale(1.05)`,
-                  )}
+                  className={`draggable ${d ? "cursor-grabbing" : "cursor-grab"}`}
+                  style={dragStyle(!!d, d?.dx ?? 0, d?.dy ?? 0, `rotate(${(d?.dx ?? 0) * 0.06}deg) scale(1.05)`)}
                   {...cardHandlers(i)}
                 >
                   <PlayingCard card={card} size="lg" />
@@ -424,7 +397,7 @@ export function ActionDeck({
         <div className="mt-3 rounded-lg border border-line bg-raised p-3">
           {pendingTotal === 0n ? (
             <ul className="space-y-1.5 text-xs leading-relaxed text-muted">
-              <li>· Drag a chip onto the line to {facingBet ? 'call or raise' : 'bet'}</li>
+              <li>· Drag a chip onto the line to {facingBet ? "call or raise" : "bet"}</li>
               {!facingBet && <li>· Tap the line to check</li>}
               <li>· Drag your cards down off the felt to fold</li>
               <li>· Drag the tall stack in for all-in</li>
@@ -432,14 +405,12 @@ export function ActionDeck({
           ) : (
             <>
               <p className="text-xs uppercase tracking-wide text-muted">On the line</p>
-              <p className="font-heading text-3xl font-semibold tabular-nums text-ink">
-                {formatChips(pendingTotal)}
-              </p>
+              <p className="font-heading text-3xl font-semibold tabular-nums text-ink">{formatChips(pendingTotal)}</p>
               <p className="text-xs text-muted">
-                {facingBet ? 'Raise to' : 'Bet'} {formatChips(player.bet + pendingTotal)}
+                {facingBet ? "Raise to" : "Bet"} {formatChips(player.bet + pendingTotal)}
                 {facingBet && pendingTotal < callAmount
                   ? ` · ${formatChips(callAmount - pendingTotal)} short of a call`
-                  : ''}
+                  : ""}
               </p>
               <div className="mt-2 flex gap-2">
                 <button
@@ -465,28 +436,18 @@ export function ActionDeck({
         <div className="mt-auto pt-3">
           <p className="text-[10px] uppercase tracking-wide text-muted">Buttons</p>
           <div className="mt-1 grid grid-cols-3 gap-1.5">
-            <button
-              type="button"
-              className={fallbackButton}
-              disabled={!live}
-              onClick={() => onAct('fold')}
-            >
+            <button type="button" className={fallbackButton} disabled={!live} onClick={() => onAct("fold")}>
               Fold
             </button>
             <button
               type="button"
               className={fallbackButton}
               disabled={!live}
-              onClick={() => onAct(facingBet ? 'call' : 'check')}
+              onClick={() => onAct(facingBet ? "call" : "check")}
             >
-              {facingBet ? 'Call' : 'Check'}
+              {facingBet ? "Call" : "Check"}
             </button>
-            <button
-              type="button"
-              className={fallbackButton}
-              disabled={!live}
-              onClick={() => onAct('all-in')}
-            >
+            <button type="button" className={fallbackButton} disabled={!live} onClick={() => onAct("all-in")}>
               All-in
             </button>
           </div>

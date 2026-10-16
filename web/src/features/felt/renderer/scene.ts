@@ -247,11 +247,15 @@ function pushStack(items: SceneItem[], felt: Felt, stack: Stack, mergeTarget: St
   };
 
   if (cut === null) {
-    for (let depth = 0; depth < size; depth++) pushWall(depth);
+    for (let depth = 0; depth < size; depth++) {
+      pushWall(depth);
+    }
     pushFace(size - 1);
   } else {
     // Cut stack: lower half, ghost ellipse at the cut plane, lifted upper half.
-    for (let depth = 0; depth < cut; depth++) pushWall(depth);
+    for (let depth = 0; depth < cut; depth++) {
+      pushWall(depth);
+    }
     if (cut > 0) {
       pushFace(cut - 1);
     }
@@ -267,7 +271,9 @@ function pushStack(items: SceneItem[], felt: Felt, stack: Stack, mergeTarget: St
         null,
       ),
     );
-    for (let depth = cut; depth < size; depth++) pushWall(depth);
+    for (let depth = cut; depth < size; depth++) {
+      pushWall(depth);
+    }
     pushFace(size - 1);
   }
 }
@@ -276,7 +282,9 @@ function pushStack(items: SceneItem[], felt: Felt, stack: Stack, mergeTarget: St
 function kindsAt(stack: Stack): number[] {
   const kindAt: number[] = [];
   for (const run of stack.runs) {
-    for (let i = 0; i < run.count; i++) kindAt.push(run.kind);
+    for (let i = 0; i < run.count; i++) {
+      kindAt.push(run.kind);
+    }
   }
   return kindAt;
 }

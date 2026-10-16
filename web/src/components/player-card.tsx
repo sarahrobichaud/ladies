@@ -1,35 +1,35 @@
-import type { CSSProperties } from 'react';
-import { formatChips } from '../snapshot';
-import type { CardDto, PlayerSnapshot, Suit } from '../snapshot';
+import type { CSSProperties } from "react";
+import type { CardDto, PlayerSnapshot, Suit } from "../snapshot";
+import { formatChips } from "../snapshot";
 
-const RANK_CHARS = ['2', '3', '4', '5', '6', '7', '8', '9', 'T', 'J', 'Q', 'K', 'A'];
+const RANK_CHARS = ["2", "3", "4", "5", "6", "7", "8", "9", "T", "J", "Q", "K", "A"];
 
 const SUIT_SYMBOLS: Record<Suit, string> = {
-  heart: '♥',
-  club: '♣',
-  spade: '♠',
-  diamond: '♦',
+  heart: "♥",
+  club: "♣",
+  spade: "♠",
+  diamond: "♦",
 };
 
 const SUIT_COLORS: Record<Suit, string> = {
-  heart: 'text-orange-strong',
-  diamond: 'text-orange-strong',
-  club: 'text-ink',
-  spade: 'text-ink',
+  heart: "text-orange-strong",
+  diamond: "text-orange-strong",
+  club: "text-ink",
+  spade: "text-ink",
 };
 
 function rankChar(rank: number): string {
-  return RANK_CHARS[rank - 2] ?? '?';
+  return RANK_CHARS[rank - 2] ?? "?";
 }
 
 const CARD_SIZES = {
-  sm: { frame: 'h-14 w-10 rounded-md', rank: 'text-xs', cornerSuit: 'text-[10px]', pip: 'text-lg' },
-  lg: { frame: 'h-24 w-16 rounded-lg', rank: 'text-base', cornerSuit: 'text-xs', pip: 'text-3xl' },
+  sm: { frame: "h-14 w-10 rounded-md", rank: "text-xs", cornerSuit: "text-[10px]", pip: "text-lg" },
+  lg: { frame: "h-24 w-16 rounded-lg", rank: "text-base", cornerSuit: "text-xs", pip: "text-3xl" },
 } as const;
 
 export function PlayingCard({
   card,
-  size = 'sm',
+  size = "sm",
   className,
   style,
 }: {
@@ -53,7 +53,7 @@ export function PlayingCard({
   return (
     <div
       style={style}
-      className={`relative flex items-center justify-center border border-line bg-raised shadow-md ${sizeClasses.frame} ${className ?? ''}`}
+      className={`relative flex items-center justify-center border border-line bg-raised shadow-md ${sizeClasses.frame} ${className ?? ""}`}
     >
       <span className="absolute top-1 left-1">{corner}</span>
       <span className={`leading-none ${sizeClasses.pip} ${color}`}>{SUIT_SYMBOLS[card.suit]}</span>
@@ -62,16 +62,16 @@ export function PlayingCard({
   );
 }
 
-const STATUS_LABELS: Record<PlayerSnapshot['status'], string> = {
-  active: 'Active',
-  folded: 'Folded',
-  'all-in': 'All-in',
+const STATUS_LABELS: Record<PlayerSnapshot["status"], string> = {
+  active: "Active",
+  folded: "Folded",
+  "all-in": "All-in",
 };
 
-const STATUS_CLASSES: Record<PlayerSnapshot['status'], string> = {
-  active: 'bg-blue-tint text-blue-strong',
-  folded: 'bg-raised text-muted',
-  'all-in': 'bg-orange-tint text-orange-strong',
+const STATUS_CLASSES: Record<PlayerSnapshot["status"], string> = {
+  active: "bg-blue-tint text-blue-strong",
+  folded: "bg-raised text-muted",
+  "all-in": "bg-orange-tint text-orange-strong",
 };
 
 export function PlayerCard({
@@ -84,13 +84,13 @@ export function PlayerCard({
   isToAct?: boolean;
 }) {
   const seat = player.seat;
-  const dimmed = player.status === 'folded';
+  const dimmed = player.status === "folded";
 
   return (
     <section
       className={`relative w-72 overflow-hidden rounded-2xl border bg-surface p-4 shadow-lg ${
-        isToAct ? 'border-orange ring-2 ring-orange' : 'border-line'
-      } ${dimmed ? 'opacity-50' : ''}`}
+        isToAct ? "border-orange ring-2 ring-orange" : "border-line"
+      } ${dimmed ? "opacity-50" : ""}`}
     >
       <header className="flex items-center justify-between">
         <div className="flex items-center gap-2">
@@ -108,9 +108,7 @@ export function PlayerCard({
               D
             </span>
           )}
-          <span
-            className={`rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_CLASSES[player.status]}`}
-          >
+          <span className={`rounded-full px-2.5 py-1 text-xs font-medium ${STATUS_CLASSES[player.status]}`}>
             {STATUS_LABELS[player.status]}
           </span>
         </div>
@@ -119,26 +117,18 @@ export function PlayerCard({
       <dl className="mt-3">
         <div>
           <dt className="text-xs uppercase tracking-wide text-muted">Stack</dt>
-          <dd className="font-heading text-2xl font-semibold tabular-nums text-ink">
-            {formatChips(player.stack)}
-          </dd>
+          <dd className="font-heading text-2xl font-semibold tabular-nums text-ink">{formatChips(player.stack)}</dd>
         </div>
         <div className="mt-2 flex gap-5">
           <div className="flex items-baseline gap-1.5">
             <dt className="text-xs uppercase tracking-wide text-muted">Bet</dt>
-            <dd
-              className={`text-sm font-semibold tabular-nums ${
-                player.bet > 0n ? 'text-orange-strong' : 'text-ink'
-              }`}
-            >
+            <dd className={`text-sm font-semibold tabular-nums ${player.bet > 0n ? "text-orange-strong" : "text-ink"}`}>
               {formatChips(player.bet)}
             </dd>
           </div>
           <div className="flex items-baseline gap-1.5">
             <dt className="text-xs uppercase tracking-wide text-muted">Committed</dt>
-            <dd className="text-sm font-semibold tabular-nums text-ink">
-              {formatChips(player.committed)}
-            </dd>
+            <dd className="text-sm font-semibold tabular-nums text-ink">{formatChips(player.committed)}</dd>
           </div>
         </div>
       </dl>
@@ -153,7 +143,7 @@ export function PlayerCard({
               key={`${card.rank}-${card.suit}`}
               card={card}
               size="lg"
-              className={i > 0 ? '-ml-8' : undefined}
+              className={i > 0 ? "-ml-8" : undefined}
               style={{ transform: `rotate(${i % 2 === 0 ? -8 : 8}deg)` }}
             />
           ))}

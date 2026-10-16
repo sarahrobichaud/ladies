@@ -1,7 +1,7 @@
-import type { CSSProperties } from 'react';
-import { formatChips } from '../snapshot';
-import type { CardDto, PlayerSnapshot } from '../snapshot';
-import { PlayerCard, PlayingCard } from './player-card';
+import type { CSSProperties } from "react";
+import type { CardDto, PlayerSnapshot } from "../snapshot";
+import { formatChips } from "../snapshot";
+import { PlayerCard, PlayingCard } from "./player-card";
 
 // Ellipse radii as a percentage of the table container's width/height.
 // Different values are what make the table a "long circle".
@@ -12,14 +12,20 @@ const RADIUS_Y = 37;
 // this so the two players face each other across the long axis instead of
 // stacking at the top and bottom of the oval.
 function seatAngle(seat: number, count: number): number {
-  if (count === 2) return seat === 0 ? 0 : 180;
+  if (count === 2) {
+    return seat === 0 ? 0 : 180;
+  }
   return (seat / count) * 360 - 90;
 }
 
 // Shrink seats as the table fills up so cards don't collide at 8-9 players.
 function seatScale(count: number): number {
-  if (count <= 4) return 1;
-  if (count <= 6) return 0.85;
+  if (count <= 4) {
+    return 1;
+  }
+  if (count <= 6) {
+    return 0.85;
+  }
   return 0.72;
 }
 
@@ -68,11 +74,7 @@ export function PokerTable({
         };
         return (
           <div key={seat} style={style} className="absolute">
-            <PlayerCard
-              player={player}
-              isButton={seat === button}
-              isToAct={seat === toAct}
-            />
+            <PlayerCard player={player} isButton={seat === button} isToAct={seat === toAct} />
           </div>
         );
       })}

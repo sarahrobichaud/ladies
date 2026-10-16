@@ -48,7 +48,9 @@ export function ChipLab() {
         const j = Math.floor(Math.random() * (i + 1));
         [slots[i], slots[j]] = [slots[j], slots[i]];
       }
-      for (const slot of slots) next = spawnStack(next, randomRuns(next.catalog), slot);
+      for (const slot of slots) {
+        next = spawnStack(next, randomRuns(next.catalog), slot);
+      }
       return next;
     });
     gestures.reset();

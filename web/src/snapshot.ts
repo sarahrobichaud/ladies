@@ -46,7 +46,9 @@ function chips(value: number | bigint): bigint {
 
 export function normalizeSnapshot(snapshot: SessionSnapshot): SessionSnapshot {
   const { hand } = snapshot;
-  if (!hand) return snapshot;
+  if (!hand) {
+    return snapshot;
+  }
 
   return {
     ...snapshot,
@@ -73,7 +75,9 @@ export function formatChips(amount: bigint): string {
 
 // Compact label for a chip face: full values don't fit on small discs.
 export function chipLabel(value: bigint): string {
-  if (value >= 1_000_000n) return `${value / 1_000_000n}M`;
+  if (value >= 1_000_000n) {
+    return `${value / 1_000_000n}M`;
+  }
   if (value >= 1_000n) {
     const k = Number(value) / 1000;
     return `${Number.isInteger(k) ? k : k.toFixed(1)}K`;

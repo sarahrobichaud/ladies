@@ -17,7 +17,9 @@ const PAIR = /\(\d+,\d+\)/g;
  */
 export function parseRuns(text: string, catalog: Catalog): Run[] {
   const compact = text.replace(/\s+/g, "");
-  if (compact === "") return [];
+  if (compact === "") {
+    return [];
+  }
 
   if (!GRAMMAR.test(compact)) {
     throw new Error(`bad run "${text.trim()}" — expected (value, count) pairs`);

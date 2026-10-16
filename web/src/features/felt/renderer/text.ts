@@ -79,7 +79,9 @@ export class GlyphAtlas {
     return {
       width: (text) => {
         let w = 0;
-        for (const ch of text) w += this.glyph(px, ch, scale).advance;
+        for (const ch of text) {
+          w += this.glyph(px, ch, scale).advance;
+        }
         return w;
       },
       glyphs: (text, x, y, color) => {
@@ -209,7 +211,9 @@ export class GlyphAtlas {
   // Double the atlas and re-rasterize everything placed so far.
   private grow(minSize: number) {
     let size = this.size * 2;
-    while (size < minSize) size *= 2;
+    while (size < minSize) {
+      size *= 2;
+    }
     this.size = size;
     this.canvas.width = size;
     this.canvas.height = size;
@@ -217,7 +221,9 @@ export class GlyphAtlas {
     this.penX = this.penY = this.rowH = 0;
     const placed = this.placed;
     this.placed = [];
-    for (const p of placed) this.entries.set(p.key, this.rasterize(p.key, p.px, p.ch, p.scale));
+    for (const p of placed) {
+      this.entries.set(p.key, this.rasterize(p.key, p.px, p.ch, p.scale));
+    }
     this.dirty = true;
   }
 }

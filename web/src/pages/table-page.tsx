@@ -1,12 +1,11 @@
-import { useState } from 'react';
-import { Link, Navigate } from 'react-router';
-import { getSession } from '../session-store';
-import { normalizeSnapshot } from '../snapshot';
-import type { SessionSnapshot } from '../snapshot';
-import { formatChips } from '../snapshot';
-import { PokerTable } from '../components/poker-table';
-import { ActionDeck } from '../components/action-deck';
-import type { ActionKind } from '../components/action-menu';
+import { useState } from "react";
+import { Link, Navigate } from "react-router";
+import { ActionDeck } from "../components/action-deck";
+import type { ActionKind } from "../components/action-menu";
+import { PokerTable } from "../components/poker-table";
+import { getSession } from "../session-store";
+import type { SessionSnapshot } from "../snapshot";
+import { formatChips, normalizeSnapshot } from "../snapshot";
 
 export function TablePage() {
   const session = getSession();
@@ -18,7 +17,9 @@ export function TablePage() {
   const [error, setError] = useState<string | null>(null);
 
   // No session (e.g. direct visit to /table) — nothing to show.
-  if (!session || !snap) return <Navigate to="/" replace />;
+  if (!session || !snap) {
+    return <Navigate to="/" replace />;
+  }
 
   const hand = snap.hand;
 
@@ -81,24 +82,20 @@ export function TablePage() {
   );
 }
 
-function applyAction(
-  session: NonNullable<ReturnType<typeof getSession>>,
-  kind: ActionKind,
-  raiseTo?: bigint,
-) {
+function applyAction(session: NonNullable<ReturnType<typeof getSession>>, kind: ActionKind, raiseTo?: bigint) {
   switch (kind) {
-    case 'fold':
+    case "fold":
       return session.fold();
-    case 'check':
+    case "check":
       return session.check();
-    case 'call':
+    case "call":
       return session.call();
-    case 'raise':
+    case "raise":
       if (raiseTo === undefined) {
-        throw new Error('raise requires an amount');
+        throw new Error("raise requires an amount");
       }
       return session.raise_to(raiseTo);
-    case 'all-in':
+    case "all-in":
       return session.all_in();
   }
 }
