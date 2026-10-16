@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useState } from 'react';
 import { createBoard, type Felt } from '../felt';
 import type { Catalog } from '../../chips/types';
 
@@ -10,6 +10,6 @@ import type { Catalog } from '../../chips/types';
  */
 export function useFelt(catalog: Catalog) {
   const [felt, setFelt] = useState<Felt>(() => createBoard(catalog, { w: 0, h: 0 }));
-  const apply = useCallback((op: (felt: Felt) => Felt) => setFelt(op), []);
+  const apply = (op: (felt: Felt) => Felt) => setFelt(op);
   return { felt, apply };
 }

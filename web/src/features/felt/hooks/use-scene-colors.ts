@@ -8,7 +8,12 @@ import { resolveSceneColors, type SceneColors } from '../renderer/colors';
  * @returns a ref with the latest resolved scene colors
  */
 export function useSceneColors(): RefObject<SceneColors> {
-  const colorsRef = useRef(resolveSceneColors());
+  const colorsRef = useRef<SceneColors | null>(null);
+
+  if (colorsRef.current === null) {
+    colorsRef.current = resolveSceneColors();
+  }
+
   useEffect(() => {
     const observer = new MutationObserver(() => {
       colorsRef.current = resolveSceneColors();
@@ -16,5 +21,5 @@ export function useSceneColors(): RefObject<SceneColors> {
     observer.observe(document.documentElement, { attributes: true });
     return () => observer.disconnect();
   }, []);
-  return colorsRef;
+  return colorsRef as RefObject<SceneColors>;
 }
