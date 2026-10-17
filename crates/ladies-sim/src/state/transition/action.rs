@@ -51,6 +51,24 @@ impl fmt::Display for IllegalAction {
 
 impl std::error::Error for IllegalAction {}
 
+/// What the player whose turn it is may do, resolved by the same rules
+/// [`Action`] enforcement uses, so a UI can offer exactly the legal moves.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ActionOptions {
+    /// Whether checking is legal: the player's bet already matches the
+    /// current bet.
+    pub can_check: bool,
+    /// What a call would post: the owed amount, clamped to the stack, so a
+    /// short stack's call is the all-in call it actually is.
+    pub call_amount: Chips,
+    /// Whether raising is legal: betting was reopened for this player.
+    pub can_raise: bool,
+    /// Minimum total raise-to level, not an increment.
+    pub min_raise_to: Chips,
+    /// Largest total raise-to level: the player's bet plus their stack.
+    pub max_raise_to: Chips,
+}
+
 /// One action, fully resolved against the current state: validation has
 /// passed and every amount is exact.
 enum Resolved {
@@ -615,5 +633,77 @@ mod raise_tests {
         assert!(next.players[3].can_raise); // the UTG raiser is reopened
         assert!(next.players[3].needs_action);
         assert!(!next.players[0].needs_action); // the all-in shover sits out
+    }
+}
+
+#[cfg(test)]
+mod options_tests {
+    use crate::state::{Action, HandState};
+
+    use super::super::fixtures::OPTIONS;
+
+    #[test]
+    fn utg_faces_the_big_blind() {
+        let state = HandState::new(1, &[5000; 3], OPTIONS);
+
+        let options = state.action_options().unwrap();
+
+        assert!(!options.can_check);
+        assert_eq!(options.call_amount, 200);
+        assert!(options.can_raise);
+        assert_eq!(options.min_raise_to, 400);
+        assert_eq!(options.max_raise_to, 5000); // the button posts nothing preflop
+    }
+
+    #[test]
+    fn the_bb_option_can_check() {
+        let state = HandState::new(1, &[5000; 2], OPTIONS);
+        let state = state.apply(Action::Call).unwrap(); // SB completes
+
+        let options = state.action_options().unwrap();
+
+        assert!(options.can_check);
+        assert_eq!(options.call_amount, 0);
+        assert!(options.can_raise);
+    }
+
+    #[test]
+    fn a_call_is_clamped_to_the_stack() {
+        // the button is UTG preflop and posts no blind: 150 faces the 200
+        let state = HandState::new(1, &[150, 5000, 5000], OPTIONS);
+
+        let options = state.action_options().unwrap();
+
+        assert!(!options.can_check);
+        assert_eq!(options.call_amount, 150); // owed 200, stack 150
+        assert_eq!(options.max_raise_to, 150);
+    }
+
+    #[test]
+    fn an_unreopened_player_cannot_raise() {
+        // UTG raises to 600 (min re-bases to 1000), the SB shoves 800 — an
+        // incomplete raise above the bet but below the minimum, which grants
+        // no raise rights — and the BB folds, leaving the unreopened UTG
+        // facing the 800
+        let state = HandState::new(1, &[5000, 800, 5000], OPTIONS);
+        let state = state.apply(Action::Raise { to: 600 }).unwrap();
+        let state = state.apply(Action::AllIn).unwrap(); // SB: 100 blind + 700 stack
+        let state = state.apply(Action::Fold).unwrap(); // BB
+
+        let options = state.action_options().unwrap();
+
+        assert!(!options.can_check);
+        assert_eq!(options.call_amount, 200);
+        assert!(!options.can_raise);
+        assert_eq!(options.min_raise_to, 1200); // the shove re-based it
+        assert_eq!(options.max_raise_to, 5000);
+    }
+
+    #[test]
+    fn a_completed_hand_offers_no_options() {
+        let state = HandState::new(1, &[5000; 2], OPTIONS);
+        let next = state.apply(Action::Fold).unwrap(); // SB folds, BB wins
+
+        assert!(next.action_options().is_none());
     }
 }

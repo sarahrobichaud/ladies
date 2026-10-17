@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, Navigate } from "react-router";
-import { ActionDeck } from "../components/action-deck";
-import type { ActionKind } from "../components/action-menu";
+import type { ActionKind } from "../components/action/action-core";
+import { ActionSystem } from "../components/action/action-system";
 import { PokerTable } from "../components/poker-table";
 import { getSession } from "../session-store";
 import type { SessionSnapshot } from "../snapshot";
@@ -61,7 +61,7 @@ export function TablePage() {
               pot={hand.pot}
             />
           </div>
-          <ActionDeck hand={hand} error={error} onAct={act} />
+          <ActionSystem hand={hand} error={error} onAct={act} />
         </>
       ) : (
         <div className="mt-6">

@@ -23,16 +23,25 @@ export type PlayerSnapshot = {
   can_raise: boolean;
 };
 
+/** What the engine says the acting player may do; null when no action is required. */
+export type ActionOptions = {
+  can_check: boolean;
+  call_amount: bigint;
+  can_raise: boolean;
+  min_raise_to: bigint;
+  max_raise_to: bigint;
+};
+
 export type HandSnapshot = {
   blinds: { small: bigint; big: bigint };
   street: string;
   to_act: number;
   current_bet: bigint;
-  min_raise: bigint;
   pot: bigint;
   board: CardDto[];
   button: number;
   players: PlayerSnapshot[];
+  options: ActionOptions | null;
 };
 
 export type SessionSnapshot = {
@@ -56,8 +65,15 @@ export function normalizeSnapshot(snapshot: SessionSnapshot): SessionSnapshot {
       ...hand,
       blinds: { small: chips(hand.blinds.small), big: chips(hand.blinds.big) },
       current_bet: chips(hand.current_bet),
-      min_raise: chips(hand.min_raise),
       pot: chips(hand.pot),
+      options: hand.options
+        ? {
+            ...hand.options,
+            call_amount: chips(hand.options.call_amount),
+            min_raise_to: chips(hand.options.min_raise_to),
+            max_raise_to: chips(hand.options.max_raise_to),
+          }
+        : null,
       players: hand.players.map((p, seat) => ({
         ...p,
         seat,

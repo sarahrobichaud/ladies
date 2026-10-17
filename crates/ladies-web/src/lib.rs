@@ -1,5 +1,5 @@
 use ladies_session::{Session, SessionError};
-use ladies_sim::{Action, Blinds, Chips, Seat, Status};
+use ladies_sim::{Action, ActionOptions, Blinds, Chips, Seat, Status};
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
@@ -45,11 +45,32 @@ struct HandSnapshot {
     street: &'static str,
     to_act: Seat,
     current_bet: Chips,
-    min_raise: Chips,
     pot: Chips,
     board: Vec<CardDto>,
     button: Seat,
     players: Vec<PlayerSnapshot>,
+    /// The acting player's options, resolved by the engine's own rules;
+    /// `None` when no action is required.
+    options: Option<ActionOptionsDto>,
+}
+
+#[derive(Serialize)]
+struct ActionOptionsDto {
+    can_check: bool,
+    call_amount: Chips,
+    can_raise: bool,
+    min_raise_to: Chips,
+    max_raise_to: Chips,
+}
+
+fn options_dto(options: ActionOptions) -> ActionOptionsDto {
+    ActionOptionsDto {
+        can_check: options.can_check,
+        call_amount: options.call_amount,
+        can_raise: options.can_raise,
+        min_raise_to: options.min_raise_to,
+        max_raise_to: options.max_raise_to,
+    }
 }
 
 #[derive(Serialize)]
@@ -143,8 +164,8 @@ impl WasmSession {
                 street: street_name(&hand.street),
                 to_act: hand.to_act,
                 current_bet: hand.current_bet,
-                min_raise: hand.min_raise,
                 pot: hand.pot(),
+                options: hand.action_options().map(options_dto),
                 board: hand.board.iter().copied().map(card_dto).collect(),
                 button: hand.positions.button,
                 players: hand

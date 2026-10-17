@@ -1,7 +1,7 @@
 mod action;
 mod progress;
 
-pub use action::{Action, IllegalAction};
+pub use action::{Action, ActionOptions, IllegalAction};
 pub use progress::Street;
 
 use super::HandState;
@@ -16,6 +16,27 @@ impl HandState {
         progress::advance_turn(&mut next, seat)?;
 
         Ok(next)
+    }
+
+    /// The acting player's options, resolved by the same rules [`Action`
+    /// enforcement](Self::apply) uses; `None` when no action is required.
+    pub fn action_options(&self) -> Option<ActionOptions> {
+        if self.street >= Street::Showdown {
+            return None;
+        }
+        let player = &self.players[self.to_act];
+        if !player.needs_action {
+            return None;
+        }
+
+        let owed = self.current_bet.saturating_sub(player.bet);
+        Some(ActionOptions {
+            can_check: owed == 0,
+            call_amount: owed.min(player.stack),
+            can_raise: player.can_raise,
+            min_raise_to: self.min_raise,
+            max_raise_to: player.bet + player.stack,
+        })
     }
 }
 

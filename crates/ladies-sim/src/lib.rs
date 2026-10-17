@@ -1,5 +1,6 @@
 pub mod state;
 
 pub use state::{
-    Action, Blinds, Chips, HandOptions, HandState, IllegalAction, Pot, Seat, Status, Street,
+    Action, ActionOptions, Blinds, Chips, HandOptions, HandState, IllegalAction, Pot, Seat, Status,
+    Street,
 };

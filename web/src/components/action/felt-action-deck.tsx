@@ -1,14 +1,14 @@
-import { type CSSProperties, type PointerEvent as ReactPointerEvent, useEffect, useMemo, useState } from "react";
-import { CHIP_SIZE, Chip } from "../features/chips/chip";
-import type { Catalog } from "../features/chips/types";
-import { FeltCanvas } from "../features/felt/components/felt-canvas";
-import { clearZone, zoneStackValue } from "../features/felt/felt";
-import { useFeltTable } from "../features/felt/hooks/use-felt-table";
-import type { ZoneSpec } from "../features/felt/zones";
-import type { HandSnapshot, PlayerSnapshot } from "../snapshot";
-import { formatChips } from "../snapshot";
-import type { ActionKind } from "./action-menu";
-import { PlayingCard } from "./player-card";
+import { type CSSProperties, type PointerEvent as ReactPointerEvent, useCallback, useMemo, useState } from "react";
+import { CHIP_SIZE, Chip } from "../../features/chips/chip";
+import type { Catalog } from "../../features/chips/types";
+import { FeltCanvas } from "../../features/felt/components/felt-canvas";
+import { clearZone, zoneStackValue } from "../../features/felt/felt";
+import { useFeltTable } from "../../features/felt/hooks/use-felt-table";
+import type { ZoneSpec } from "../../features/felt/zones";
+import { formatChips } from "../../snapshot";
+import { PlayingCard } from "../player-card";
+import { actionContext, commitPlan, useEpochReset } from "./action-core";
+import type { ActionSystemProps } from "./action-system";
 
 // Gesture threshold in px.
 const FOLD_DISTANCE = 90;
@@ -20,46 +20,16 @@ const TABLE_LAYOUT: readonly ZoneSpec[] = [
   { id: BET_ZONE_ID, purpose: "bet", slots: { cols: { from: 2, to: -3 }, rows: { from: 1, to: 2 } } },
 ];
 
-// What committing the chips currently staged on the line would do.
-type Plan = { ok: true; kind: ActionKind; raiseTo?: bigint; label: string } | { ok: false; reason: string };
-
-function commitPlan(
-  total: bigint,
-  player: PlayerSnapshot,
-  facingBet: boolean,
-  callAmount: bigint,
-  minRaiseTo: bigint,
-): Plan | null {
-  if (total === 0n) {
-    return null;
-  }
-
-  const target = player.bet + total;
-  const maxTo = player.bet + player.stack;
-
-  // Everything went in: let the engine decide call/raise/all-in.
-  if (target >= maxTo) {
-    return { ok: true, kind: "all-in", label: `All-in ${formatChips(maxTo)}` };
-  }
-  if (facingBet && total < callAmount) {
-    return { ok: false, reason: `${formatChips(callAmount - total)} short of a call` };
-  }
-  if (facingBet && total === callAmount) {
-    return { ok: true, kind: "call", label: `Call ${formatChips(callAmount)}` };
-  }
-  if (target < minRaiseTo) {
-    return { ok: false, reason: `Min is ${formatChips(minRaiseTo)}` };
-  }
-  if (!player.can_raise) {
-    return { ok: false, reason: "Betting was not reopened" };
-  }
-  return {
-    ok: true,
-    kind: "raise",
-    raiseTo: target,
-    label: `${facingBet ? "Raise to" : "Bet"} ${formatChips(target)}`,
-  };
+// Chip denominations scaled to the blinds, one palette tier per denomination.
+function blindsCatalog({ small, big }: { small: bigint; big: bigint }): Catalog {
+  return [small, big, big * 5n, big * 25n, big * 100n]
+    .filter((value, i, all) => value > 0n && all.indexOf(value) === i)
+    .sort((a, b) => (a < b ? -1 : 1))
+    .map((value, tier) => ({ value, tier }));
 }
+
+// Hole-card fold gesture: grab a card, drag it down, release to fold.
+type CardDrag = { pointerId: number; startX: number; startY: number; dx: number; dy: number; index: number };
 
 // Transform for a hole card while it is / isn't being dragged.
 function dragStyle(active: boolean, dx: number, dy: number, extra = ""): CSSProperties {
@@ -74,30 +44,14 @@ function dragStyle(active: boolean, dx: number, dy: number, extra = ""): CSSProp
   return { transition: "transform 160ms ease" };
 }
 
-// Chip denominations scaled to the blinds, one palette tier per denomination.
-function blindsCatalog({ small, big }: { small: bigint; big: bigint }): Catalog {
-  return [small, big, big * 5n, big * 25n, big * 100n]
-    .filter((value, i, all) => value > 0n && all.indexOf(value) === i)
-    .sort((a, b) => (a < b ? -1 : 1))
-    .map((value, tier) => ({ value, tier }));
-}
-
-// Hole-card fold gesture: grab a card, drag it down, release to fold.
-type CardDrag = { pointerId: number; startX: number; startY: number; dx: number; dy: number; index: number };
-
-export function ActionDeck({
-  hand,
-  error,
-  onAct,
-}: {
-  hand: HandSnapshot;
-  error: string | null;
-  onAct: (kind: ActionKind, raiseTo?: bigint) => void;
-}) {
-  const player = hand.players[hand.to_act];
-  const live = player.needs_action && hand.street !== "complete" && hand.street !== "showdown";
-  const facingBet = hand.current_bet > player.bet;
-  const callAmount = facingBet ? hand.current_bet - player.bet : 0n;
+/**
+ * The desktop action UI: chips staged on the felt's betting line are the
+ * wager, hole cards drag down to fold, and a console reads the plan back.
+ * @param props - the hand snapshot, engine error, and action sink
+ */
+export function FeltActionDeck({ hand, error, onAct }: ActionSystemProps) {
+  const ctx = actionContext(hand);
+  const { player, live, facingBet, callAmount } = ctx;
 
   // The table felt: chips staged on the betting line are the wager. The
   // catalog is scaled to the blinds so the tray holds usable denominations.
@@ -107,19 +61,14 @@ export function ActionDeck({
   const { felt, store, gestures } = table;
 
   const staged = zoneStackValue(felt, BET_ZONE_ID);
-  const plan = commitPlan(staged, player, facingBet, callAmount, hand.min_raise);
+  const plan = commitPlan(staged, ctx);
   const commitLabel = plan === null ? null : "label" in plan ? plan.label : plan.reason;
 
   // The line resets when the turn passes on or the street turns.
-  const epoch = `${hand.to_act}:${hand.street}`;
-  const [feltEpoch, setFeltEpoch] = useState(epoch);
-  useEffect(() => {
-    if (feltEpoch === epoch) {
-      return;
-    }
-    setFeltEpoch(epoch);
-    store.apply((f) => clearZone(f, BET_ZONE_ID));
-  }, [epoch, feltEpoch, store]);
+  useEpochReset(
+    hand,
+    useCallback(() => store.apply((f) => clearZone(f, BET_ZONE_ID)), [store]),
+  );
 
   const commit = () => {
     if (!live || !plan?.ok) {
@@ -260,9 +209,7 @@ export function ActionDeck({
               <p className="font-heading text-3xl font-semibold tabular-nums text-ink">{formatChips(staged)}</p>
               <p className="text-xs text-muted">
                 {facingBet ? "Raise to" : "Bet"} {formatChips(player.bet + staged)}
-                {facingBet && staged < callAmount
-                  ? ` · ${formatChips(callAmount - staged)} short of a call`
-                  : ""}
+                {facingBet && staged < callAmount ? ` · ${formatChips(callAmount - staged)} short of a call` : ""}
               </p>
               <div className="mt-2 flex gap-2">
                 <button
