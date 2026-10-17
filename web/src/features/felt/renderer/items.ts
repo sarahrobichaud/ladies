@@ -62,6 +62,53 @@ export function shadow(x: number, y: number, spread: number, alpha: number, soft
 }
 
 /**
+ * Build a darkened ellipse pressed into the felt, like a bet spot.
+ * @param x - center x in px
+ * @param y - center y in px
+ * @param rx - horizontal radius in px
+ * @param alpha - fill opacity
+ * @param soft - px over which the fill edge fades
+ */
+export function spot(x: number, y: number, rx: number, alpha: number, soft: number): RingItem {
+  return {
+    kind: "ring",
+    x,
+    y,
+    rx,
+    ry: rx * CHIP_SQUASH,
+    width: 0,
+    dash: [0, 0],
+    stroke: [0, 0, 0, 0],
+    fill: [0, 0, 0, alpha],
+    soft,
+  };
+}
+
+/**
+ * Build an engraved spot with a rim stroke, so a button reads pressable.
+ * @param x - center x in px
+ * @param y - center y in px
+ * @param rx - horizontal radius in px
+ * @param stroke - rim stroke color
+ * @param fillAlpha - fill opacity of the pressed-in spot
+ * @param soft - px over which the fill edge fades
+ */
+export function engraved(x: number, y: number, rx: number, stroke: RGBA, fillAlpha: number, soft: number): RingItem {
+  return {
+    kind: "ring",
+    x,
+    y,
+    rx,
+    ry: rx * CHIP_SQUASH,
+    width: 1,
+    dash: [0, 0],
+    stroke,
+    fill: [0, 0, 0, fillAlpha],
+    soft,
+  };
+}
+
+/**
  * Append centered text glyphs to the scene, optionally squashed flat onto the felt plane.
  * @param items - scene list to append to
  * @param font - font face to lay the text out with
