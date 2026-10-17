@@ -67,5 +67,17 @@ export type GlyphItem = {
   color: RGB;
 };
 
-export type SceneItem = RingItem | ChipItem | WallItem | PanelItem | GlyphItem;
+/** The felt surface: a rounded rect washed with the felt gradient. */
+export type FeltItem = {
+  kind: "felt";
+  x: number;
+  y: number;
+  hw: number;
+  hh: number;
+  radius: number;
+  felt: RGB;
+  feltDeep: RGB;
+};
+
+export type SceneItem = RingItem | ChipItem | WallItem | PanelItem | GlyphItem | FeltItem;
 export type Scene = SceneItem[];

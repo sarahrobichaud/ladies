@@ -39,7 +39,7 @@ export const SLOT_SPACING = CHIP_DIAMETER + SLOT_GAP;
 export const SLOT_ROW_HEIGHT = Math.round(SLOT_SPACING * (Math.sqrt(3) / 2));
 
 /** Button slot half-width in px; buttons live on lattice slots but needn't be chip-shaped. */
-export const BUTTON_HALF_WIDTH = 26;
+export const BUTTON_HALF_WIDTH = Math.round(CHIP_RADIUS * 1.18);
 
 /** Button slot half-height in px before the oblique squash. */
-export const BUTTON_HALF_HEIGHT = 15;
+export const BUTTON_HALF_HEIGHT = Math.round(CHIP_RADIUS * 0.68);

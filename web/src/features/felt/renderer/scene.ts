@@ -63,7 +63,6 @@ const DIM_FACTOR = 0.5; // non-merge-target stacks while dragging
 const LABEL_BASELINE_OFFSET = 0.5; // px below chip center
 
 // Hover badge.
-const BADGE_MIN_Y = 16; // px from the felt top
 const BADGE_LIFT = 14; // px above the top chip
 const BADGE_CLEARANCE = 10; // extra px above the top chip
 const BADGE_PADDING_X = 8;
@@ -71,12 +70,17 @@ const BADGE_HALF_HEIGHT = 9;
 const BADGE_RADIUS = 9;
 const BADGE_FILL_ALPHA = 0.9;
 
+// Felt surface.
+const FELT_RADIUS = 12; // px, matches the rounded-xl chrome
+
 /** Fonts the scene renders with. */
 export type SceneFonts = { chip: FontFace; badge: FontFace };
 
 /** Inputs to the scene builder for one frame. */
 export type SceneInput = {
   felt: Felt;
+  /** The felt surface quad in scene coords: the gradient wash under everything. */
+  surface: { x: number; y: number; w: number; h: number };
   handPos: Point | null;
   drag: Drag | null;
   hover: Pick | null;
@@ -105,6 +109,8 @@ export function buildScene(input: SceneInput): SceneItem[] {
   const { felt, handPos, drag, hover, lift, colors, time, fonts } = input;
   const items: SceneItem[] = [];
 
+  pushFeltSurface(items, input.surface, colors);
+
   const zones = feltZones(felt);
   pushLattice(items, felt, zones, colors);
   pushZoneMarks(items, zones);
@@ -128,6 +134,20 @@ export function buildScene(input: SceneInput): SceneItem[] {
   pushHoverBadge(items, felt, hover, drag, colors, fonts);
 
   return items;
+}
+
+/** Draw the felt surface: the gradient wash every other item sits on. */
+function pushFeltSurface(items: SceneItem[], surface: SceneInput["surface"], colors: SceneColors) {
+  items.push({
+    kind: "felt",
+    x: surface.x + surface.w / 2,
+    y: surface.y + surface.h / 2,
+    hw: surface.w / 2,
+    hh: surface.h / 2,
+    radius: FELT_RADIUS,
+    felt: colors.felt,
+    feltDeep: colors.feltDeep,
+  });
 }
 
 /** Draw one dashed ring per standard chip slot; marked zones render their own markers instead. */
@@ -216,7 +236,7 @@ function pushButtons(items: SceneItem[], zones: Zone[], colors: SceneColors, fon
 
 /** Draw the landing ghost where the hand's bottom chip would sit. */
 function pushLandingGhost(items: SceneItem[], landing: Landing | null, colors: SceneColors) {
-  if (!landing || landing.type === "none") {
+  if (!landing || landing.type === "none" || landing.type === "discard") {
     return;
   }
 
@@ -375,6 +395,9 @@ function pushHand(items: SceneItem[], felt: Felt, handPos: Point | null, colors:
     return;
   }
 
+  const chips = felt.hand.chips;
+  const topIndex = chips.length - 1;
+
   // Held above the table: a softer, wider shadow offset further down.
   items.push(
     shadow(
@@ -385,9 +408,6 @@ function pushHand(items: SceneItem[], felt: Felt, handPos: Point | null, colors:
       HAND_SHADOW_SOFT,
     ),
   );
-
-  const chips = felt.hand.chips;
-  const topIndex = chips.length - 1;
 
   for (let i = 0; i < chips.length; i++) {
     const chip = chips[i];
@@ -447,7 +467,7 @@ function pushHoverBadge(
   }
 
   const { x, y } = slotPosition(stack.slot);
-  const badgeY = Math.max(BADGE_MIN_Y, y - stackTopOffset(stack) - BADGE_LIFT - BADGE_CLEARANCE);
+  const badgeY = y - stackTopOffset(stack) - BADGE_LIFT - BADGE_CLEARANCE;
   const text = formatChips(runsValue(stack.runs, felt.catalog));
   const textWidth = fonts.badge.width(text);
 

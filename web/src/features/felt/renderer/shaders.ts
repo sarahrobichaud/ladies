@@ -16,6 +16,14 @@
 // world.ts (see initWorldUniforms in renderer.ts). Screen-domain px
 // (hairline widths, highlight offset, the inner-ring dash period) stay
 // baked: they tune crispness, not world scale.
+//
+// Every pass fades by canvas-space y through uFade = [startY, endY]. The
+// felt surface fades by alpha (it is the bottom layer). Scene items instead
+// dissolve by mixing their color toward the backdrop while staying opaque,
+// so a stack fades as one solid shape tinted into the background — no
+// see-through between overlapping chips. The backdrop is sampled by height:
+// page background high up, felt color through the felt's own ramp, so the
+// chip fade band may overlap the felt ramp safely.
 
 // --- chip face ---------------------------------------------------------------
 
@@ -30,15 +38,18 @@ in float iDim;
 in vec4 iHighlight;
 in float iAngle;
 uniform vec2 uResolution;
+uniform vec2 uOrigin;
 out vec2 vLocal;
 out vec3 vFace;
 out vec3 vSpot;
 out float vDim;
 out vec4 vHighlight;
 out float vAngle;
+out float vWorldY;
 void main() {
   vLocal = (aCorner * 2.0 - 1.0) * iExtent;
-  vec2 world = iCenter + vLocal;
+  vec2 world = iCenter + vLocal + uOrigin;
+  vWorldY = world.y;
   vec2 ndc = world / uResolution * 2.0 - 1.0;
   gl_Position = vec4(ndc.x, -ndc.y, 0.0, 1.0);
   vFace = iFace;
@@ -56,8 +67,13 @@ in vec3 vSpot;
 in float vDim;
 in vec4 vHighlight;
 in float vAngle;
+in float vWorldY;
 out vec4 frag;
 
+uniform vec2 uFade;
+uniform vec2 uFeltFade;
+uniform vec3 uCanvasColor;
+uniform vec3 uFeltColor;
 uniform float uChipRadius;
 uniform float uSquash;
 uniform float uSpotHalfWidth;
@@ -108,6 +124,13 @@ void main() {
   float hiA = (1.0 - smoothstep(-aa, aa, abs(r - uChipRadius - 2.0) - 1.0)) * vHighlight.a;
   rgb = mix(rgb, vHighlight.rgb, hiA);
 
+  // Dissolve into the backdrop, sampled by height: page background high up,
+  // felt color where the felt's own ramp is still visible. Opaque throughout.
+  float feltT = clamp((vWorldY - uFeltFade.x) / max(uFeltFade.y - uFeltFade.x, 0.001), 0.0, 1.0);
+  feltT = feltT * feltT * (3.0 - 2.0 * feltT);
+  vec3 backdrop = mix(uCanvasColor, uFeltColor, feltT);
+  float fade = clamp((vWorldY - uFade.x) / max(uFade.y - uFade.x, 0.001), 0.0, 1.0);
+  rgb = mix(backdrop, rgb, fade);
   float alpha = max(body, max(rimA, max(arcA, hiA)));
   frag = vec4(rgb * alpha, alpha);
 }`;
@@ -125,15 +148,18 @@ in float iDim;
 in float iThick;
 in float iAngle;
 uniform vec2 uResolution;
+uniform vec2 uOrigin;
 out vec2 vLocal;
 out vec3 vFace;
 out vec3 vSpot;
 out float vDim;
 out float vThick;
 out float vAngle;
+out float vWorldY;
 void main() {
   vLocal = (aCorner * 2.0 - 1.0) * iExtent;
-  vec2 world = iCenter + vLocal;
+  vec2 world = iCenter + vLocal + uOrigin;
+  vWorldY = world.y;
   vec2 ndc = world / uResolution * 2.0 - 1.0;
   gl_Position = vec4(ndc.x, -ndc.y, 0.0, 1.0);
   vFace = iFace;
@@ -151,8 +177,13 @@ in vec3 vSpot;
 in float vDim;
 in float vThick;
 in float vAngle;
+in float vWorldY;
 out vec4 frag;
 
+uniform vec2 uFade;
+uniform vec2 uFeltFade;
+uniform vec3 uCanvasColor;
+uniform vec3 uFeltColor;
 uniform float uChipRadius;
 uniform float uSquash;
 uniform float uSpotHalfWidth;
@@ -195,6 +226,11 @@ void main() {
   float groove = (1.0 - smoothstep(-aa, aa, abs(dBot) - 0.5)) * smoothstep(-aa, aa, q.y - T);
   base = mix(base, vec3(0.0), groove * 0.38);
 
+  float feltT = clamp((vWorldY - uFeltFade.x) / max(uFeltFade.y - uFeltFade.x, 0.001), 0.0, 1.0);
+  feltT = feltT * feltT * (3.0 - 2.0 * feltT);
+  vec3 backdrop = mix(uCanvasColor, uFeltColor, feltT);
+  float fade = clamp((vWorldY - uFade.x) / max(uFade.y - uFade.x, 0.001), 0.0, 1.0);
+  base = mix(backdrop, base, fade);
   frag = vec4(base * wall, wall);
 }`;
 
@@ -212,6 +248,7 @@ in float iSoft;
 in vec4 iStroke;
 in vec4 iFill;
 uniform vec2 uResolution;
+uniform vec2 uOrigin;
 out vec2 vLocal;
 out vec2 vRadii;
 out float vHalfWidth;
@@ -219,9 +256,11 @@ out vec2 vDash;
 out float vSoft;
 out vec4 vStroke;
 out vec4 vFill;
+out float vWorldY;
 void main() {
   vLocal = (aCorner * 2.0 - 1.0) * iExtent;
-  vec2 world = iCenter + vLocal;
+  vec2 world = iCenter + vLocal + uOrigin;
+  vWorldY = world.y;
   vec2 ndc = world / uResolution * 2.0 - 1.0;
   gl_Position = vec4(ndc.x, -ndc.y, 0.0, 1.0);
   vRadii = iRadii;
@@ -241,7 +280,10 @@ in vec2 vDash;
 in float vSoft;
 in vec4 vStroke;
 in vec4 vFill;
+in float vWorldY;
 out vec4 frag;
+
+uniform vec2 uFade;
 
 void main() {
   vec2 p = vLocal;
@@ -259,8 +301,9 @@ void main() {
   // soft > 0 fades the fill edge over that many px (contact shadows).
   float fillA = 1.0 - smoothstep(-aa, vSoft + aa, d);
 
-  vec4 s = vec4(vStroke.rgb * vStroke.a * strokeA, vStroke.a * strokeA);
-  vec4 f = vec4(vFill.rgb * vFill.a * fillA, vFill.a * fillA);
+  float fade = clamp((vWorldY - uFade.x) / max(uFade.y - uFade.x, 0.001), 0.0, 1.0);
+  vec4 s = vec4(vStroke.rgb * vStroke.a * strokeA, vStroke.a * strokeA) * fade;
+  vec4 f = vec4(vFill.rgb * vFill.a * fillA, vFill.a * fillA) * fade;
   frag = s + f * (1.0 - s.a);
 }`;
 
@@ -276,14 +319,17 @@ in float iRadius;
 in vec4 iFill;
 in vec4 iStroke;
 uniform vec2 uResolution;
+uniform vec2 uOrigin;
 out vec2 vLocal;
 out vec2 vHalfSize;
 out float vRadius;
 out vec4 vFill;
 out vec4 vStroke;
+out float vWorldY;
 void main() {
   vLocal = (aCorner * 2.0 - 1.0) * iExtent;
-  vec2 world = iCenter + vLocal;
+  vec2 world = iCenter + vLocal + uOrigin;
+  vWorldY = world.y;
   vec2 ndc = world / uResolution * 2.0 - 1.0;
   gl_Position = vec4(ndc.x, -ndc.y, 0.0, 1.0);
   vHalfSize = iHalfSize;
@@ -299,7 +345,10 @@ in vec2 vHalfSize;
 in float vRadius;
 in vec4 vFill;
 in vec4 vStroke;
+in float vWorldY;
 out vec4 frag;
+
+uniform vec2 uFade;
 
 void main() {
   vec2 q = abs(vLocal) - vHalfSize + vRadius;
@@ -309,8 +358,9 @@ void main() {
   float fillA = 1.0 - smoothstep(-aa, aa, d);
   float strokeA = 1.0 - smoothstep(-aa, aa, abs(d) - 0.5);
 
-  vec4 s = vec4(vStroke.rgb * vStroke.a * strokeA, vStroke.a * strokeA);
-  vec4 f = vec4(vFill.rgb * vFill.a * fillA, vFill.a * fillA);
+  float fade = clamp((vWorldY - uFade.x) / max(uFade.y - uFade.x, 0.001), 0.0, 1.0);
+  vec4 s = vec4(vStroke.rgb * vStroke.a * strokeA, vStroke.a * strokeA) * fade;
+  vec4 f = vec4(vFill.rgb * vFill.a * fillA, vFill.a * fillA) * fade;
   frag = s + f * (1.0 - s.a);
 }`;
 
@@ -324,10 +374,13 @@ in vec2 iSize;
 in vec4 iUV;
 in vec3 iColor;
 uniform vec2 uResolution;
+uniform vec2 uOrigin;
 out vec2 vUV;
 out vec3 vColor;
+out float vWorldY;
 void main() {
-  vec2 world = iPos + aCorner * iSize;
+  vec2 world = iPos + aCorner * iSize + uOrigin;
+  vWorldY = world.y;
   vec2 ndc = world / uResolution * 2.0 - 1.0;
   gl_Position = vec4(ndc.x, -ndc.y, 0.0, 1.0);
   vUV = mix(iUV.xy, iUV.zw, aCorner);
@@ -338,9 +391,91 @@ export const TEXT_FS = `#version 300 es
 precision mediump float;
 in vec2 vUV;
 in vec3 vColor;
+in float vWorldY;
 uniform sampler2D uAtlas;
+uniform vec2 uFade;
+uniform vec2 uFeltFade;
+uniform vec3 uCanvasColor;
+uniform vec3 uFeltColor;
 out vec4 frag;
 void main() {
+  float feltT = clamp((vWorldY - uFeltFade.x) / max(uFeltFade.y - uFeltFade.x, 0.001), 0.0, 1.0);
+  feltT = feltT * feltT * (3.0 - 2.0 * feltT);
+  vec3 backdrop = mix(uCanvasColor, uFeltColor, feltT);
+  float fade = clamp((vWorldY - uFade.x) / max(uFade.y - uFade.x, 0.001), 0.0, 1.0);
   float a = texture(uAtlas, vUV).a;
-  frag = vec4(vColor * a, a);
+  frag = vec4(mix(backdrop, vColor, fade) * a, a);
+}`;
+
+// --- felt surface ----------------------------------------------------------------
+
+// The gradient wash everything sits on: a rounded rect filled with the
+// felt-to-felt-deep radial gradient (lit from above the far edge, like the
+// CSS wash it replaces) plus a gentle edge vignette. It fades with its own
+// zone so the felt dissolves before the chips riding on it do.
+
+export const FELT_VS = `#version 300 es
+precision highp float;
+in vec2 aCorner;
+in vec2 iCenter;
+in vec2 iExtent;
+in vec2 iHalfSize;
+in float iRadius;
+in vec3 iFelt;
+in vec3 iFeltDeep;
+uniform vec2 uResolution;
+uniform vec2 uOrigin;
+out vec2 vLocal;
+out vec2 vHalfSize;
+out float vRadius;
+out vec3 vFelt;
+out vec3 vFeltDeep;
+out float vWorldY;
+void main() {
+  vLocal = (aCorner * 2.0 - 1.0) * iExtent;
+  vec2 world = iCenter + vLocal + uOrigin;
+  vWorldY = world.y;
+  vec2 ndc = world / uResolution * 2.0 - 1.0;
+  gl_Position = vec4(ndc.x, -ndc.y, 0.0, 1.0);
+  vHalfSize = iHalfSize;
+  vRadius = iRadius;
+  vFelt = iFelt;
+  vFeltDeep = iFeltDeep;
+}`;
+
+export const FELT_FS = `#version 300 es
+precision highp float;
+in vec2 vLocal;
+in vec2 vHalfSize;
+in float vRadius;
+in vec3 vFelt;
+in vec3 vFeltDeep;
+in float vWorldY;
+out vec4 frag;
+
+uniform vec2 uFade;
+
+void main() {
+  vec2 q = abs(vLocal) - vHalfSize + vRadius;
+  float d = length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - vRadius;
+  float aa = max(fwidth(d), 1e-4);
+  float shape = 1.0 - smoothstep(-aa, aa, d);
+
+  // Radial wash: felt holds near the focus above the far edge, then
+  // deepens toward the gradient ellipse rim.
+  vec2 p = vLocal + vHalfSize;
+  vec2 size = vHalfSize * 2.0;
+  vec2 focus = vec2(0.5 * size.x, -0.3 * size.y);
+  vec2 radii = vec2(1.2 * size.x, 0.9 * size.y);
+  float ed = length((p - focus) / radii);
+  float t = clamp((ed - 0.5) / 0.5, 0.0, 1.0);
+  vec3 rgb = mix(vFelt, vFeltDeep, t);
+
+  // Gentle vignette so the wash keeps depth at the side edges.
+  rgb *= 1.0 - 0.22 * (1.0 - smoothstep(0.0, 70.0, -d));
+
+  // Ease both ends of the ramp so the felt's emergence is gradual.
+  float fade = clamp((vWorldY - uFade.x) / max(uFade.y - uFade.x, 0.001), 0.0, 1.0);
+  float alpha = shape * (fade * fade * (3.0 - 2.0 * fade));
+  frag = vec4(rgb * alpha, alpha);
 }`;

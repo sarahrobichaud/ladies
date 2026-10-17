@@ -6,7 +6,7 @@ import { parseRuns } from "../features/chips/notation";
 import { coalesce } from "../features/chips/runs";
 import type { Catalog, Run } from "../features/chips/types";
 import { ChipTray } from "../features/felt/components/chip-tray";
-import { FeltCanvas } from "../features/felt/components/felt-canvas";
+import { FELT_ORIGIN, FeltCanvas } from "../features/felt/components/felt-canvas";
 import {
   clearBoard,
   clearZone,
@@ -62,7 +62,7 @@ export function ChipLabPage() {
       apply((f) => clearZone(f, action.zoneId));
     }
   };
-  const gestures = useFeltGestures({ felt, apply, canvasRef, onAction });
+  const gestures = useFeltGestures({ felt, apply, canvasRef, origin: FELT_ORIGIN, onAction });
   const [notation, setNotation] = useState("");
   const [notationError, setNotationError] = useState<string | null>(null);
 

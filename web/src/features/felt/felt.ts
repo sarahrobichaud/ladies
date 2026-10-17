@@ -14,6 +14,10 @@ import { FREE_LAYOUT, isPlaceable, resolveZones, type Zone, type ZoneSpec, zoneA
 /** Wheel-sizing cap for a uniform hand; part of the sizeHand precondition. */
 export const STACK_CAPACITY = 10;
 
+/** Max chips in one resting stack; placements beyond it are rejected.
+ *  Bounds a stack's screen height so top-row stacks stay inside the viewport. */
+export const STACK_HEIGHT_CAP = 15;
+
 /** Unique identifier for a stack resting on the felt. */
 export type StackId = number;
 
@@ -145,6 +149,8 @@ function findStack(felt: Felt, id: StackId): Stack | undefined {
 
 /**
  * Places runs at a slot, merging into the occupant when there is one.
+ * Rejected when the slot is unplaceable or the resulting stack would breach
+ * the stack height cap.
  * @param felt - The felt to update.
  * @param runs - The runs to place.
  * @param slot - The slot to place them at.
@@ -160,10 +166,16 @@ export function placeRuns(felt: Felt, runs: Run[], slot: Slot): Felt {
   }
   const occupant = felt.stacks.find((s) => sameSlot(s.slot, slot));
   if (occupant) {
+    if (stackSize(occupant) + runsSize(canonical) > STACK_HEIGHT_CAP) {
+      return felt;
+    }
     return {
       ...felt,
       stacks: felt.stacks.map((s) => (s.id === occupant.id ? { ...s, runs: coalesce([...s.runs, ...canonical]) } : s)),
     };
+  }
+  if (runsSize(canonical) > STACK_HEIGHT_CAP) {
+    return felt;
   }
   return {
     ...felt,
@@ -299,7 +311,8 @@ export function sizeHand(felt: Felt, delta: 1 | -1): Felt {
 }
 
 /**
- * Releases the hand at a slot, merging into the occupant or founding a new stack.
+ * Releases the hand at a slot, merging into the occupant or founding a new
+ * stack; a rejected placement keeps the hand held.
  * @param felt - The felt to update.
  * @param slot - The slot to commit at.
  */
@@ -308,7 +321,8 @@ export function commitHand(felt: Felt, slot: Slot): Felt {
   if (!hand || hand.chips.length === 0) {
     return felt;
   }
-  return { ...placeRuns(felt, runsFromChips(hand.chips), slot), hand: null };
+  const placed = placeRuns(felt, runsFromChips(hand.chips), slot);
+  return placed === felt ? felt : { ...placed, hand: null };
 }
 
 /**

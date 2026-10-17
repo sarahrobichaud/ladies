@@ -1,12 +1,62 @@
-import type { RefObject } from "react";
-import { useEffect, useRef } from "react";
+import type { CSSProperties, ReactNode, RefObject } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useCanvasRenderLoop } from "../../../hooks/use-canvas-render-loop";
 import { useLatestRef } from "../../../hooks/use-latest-ref";
-import { type Felt, setFelt as resizeFelt } from "../felt";
+import { CHIP_SIZE } from "../../chips/chip";
+import type { Point, Size } from "../geom";
+import { STACK_HEIGHT_CAP, type Felt, setFelt as resizeFelt } from "../felt";
 import type { FeltGestures } from "../hooks/use-felt-gestures";
 import { useSceneColors } from "../hooks/use-scene-colors";
 import { createPrimitiveRenderer, type PrimitiveRenderer } from "../renderer/renderer";
 import { buildScene } from "../renderer/scene";
+import { CHIP_RADIUS, CHIP_SQUASH, SLOT_ROW_HEIGHT, STACK_LIFT } from "../world";
+
+/**
+ * Canvas px where a capped top-row stack's top chip lands. The top inset is
+ * derived from it, so the whole felt scale follows CHIP_SIZE from one knob.
+ */
+const STACK_TOP_Y = 16;
+
+/**
+ * Canvas-to-felt insets in CSS px: the offset of the placeable felt surface
+ * within the canvas viewport, derived from the world scale. The top inset is
+ * stack headroom — a STACK_HEIGHT_CAP stack on the top row tops out at
+ * STACK_TOP_Y — and the top region doubles as the fade zone: the felt
+ * surface and the chips fade in GL with their own zones (the felt dissolves
+ * first), so stacks rise off the felt without a hard cut.
+ */
+const FELT_INSET = {
+  top: Math.round(
+    (STACK_HEIGHT_CAP - 1) * STACK_LIFT + CHIP_RADIUS * CHIP_SQUASH + STACK_TOP_Y - SLOT_ROW_HEIGHT,
+  ),
+  x: Math.round(CHIP_RADIUS * 0.72),
+  bottom: Math.round(CHIP_RADIUS * 0.72),
+};
+
+/** Canvas px of the top lattice row; the fade bands live in the headroom
+ *  above it, so stacks resting in the top slots stay fully solid. */
+const TOP_ROW_Y = SLOT_ROW_HEIGHT + FELT_INSET.top;
+
+/** Fade zones in canvas px as [startY, endY], both confined to the upper
+ *  headroom: stacks stay fully solid until they cross the threshold (45% of
+ *  the headroom above the top slots), then dissolve aggressively over a
+ *  short ramp. Faded chips sample the backdrop by height (page background
+ *  high up, felt color through the felt's own ramp), so the overlapping
+ *  bands stay coherent — a fully faded chip always matches what is behind it. */
+const SCENE_FADE: readonly [number, number] = [Math.round(TOP_ROW_Y * 0.15), Math.round(TOP_ROW_Y * 0.45)];
+const FELT_FADE: readonly [number, number] = [Math.round(TOP_ROW_Y * 0.1), Math.round(TOP_ROW_Y * 0.85)];
+
+/** The felt surface's top-left corner within the canvas, in CSS px.
+ *  Shared with useFeltGestures so pointer mapping matches the rendered felt. */
+export const FELT_ORIGIN: Point = { x: FELT_INSET.x, y: FELT_INSET.top };
+
+/** Where the felt surface, and overlays anchored to it, sit in the container. */
+const FELT_RECT_STYLE: CSSProperties = {
+  top: FELT_INSET.top,
+  right: FELT_INSET.x,
+  bottom: FELT_INSET.bottom,
+  left: FELT_INSET.x,
+};
 
 type FeltCanvasProps = {
   felt: Felt;
@@ -19,16 +69,35 @@ type FeltCanvasProps = {
   className?: string;
   /** Shown when the felt holds no stacks and no hand. */
   emptyLabel?: string;
+  /** DOM chrome rendered above the canvas (trays, cards, readouts). */
+  children?: ReactNode;
 };
 
 /**
  * The felt canvas block: a WebGL-rendered chip felt driven by felt state,
- * with pointer interactions handled by the injected gesture machine.
- * @param props - felt state, op dispatcher, canvas ref, gestures, and chrome
+ * with pointer interactions handled by the injected gesture machine. The
+ * canvas is the full viewport; the felt surface is an inset region of it,
+ * rendered in GL with a double-layer fade — the felt dissolves before the
+ * chips riding on it do — so stacks rise off the felt without a hard cut.
+ * @param props - felt state, op dispatcher, canvas ref, gestures, chrome, and overlays
  */
-export function FeltCanvas({ felt, apply, canvasRef, gestures, className, emptyLabel }: FeltCanvasProps) {
+export function FeltCanvas({ felt, apply, canvasRef, gestures, className, emptyLabel, children }: FeltCanvasProps) {
   const rendererRef = useRef<PrimitiveRenderer | null>(null);
   const colorsRef = useSceneColors();
+  const viewportRef = useRef<Size>({ w: 0, h: 0 });
+  // First GL failure (init or draw), surfaced in the DOM until reloaded.
+  const [glError, setGlError] = useState<string | null>(null);
+  const reportedRef = useRef(false);
+  // Frames drawn before the ResizeObserver's first callback; it fires after
+  // the loop starts, so an empty viewport is normal for the first frames.
+  const emptyFramesRef = useRef(0);
+  const reportGlError = useCallback((message: string, err: unknown) => {
+    console.error(`felt canvas: ${message}`, err);
+    if (!reportedRef.current) {
+      reportedRef.current = true;
+      setGlError(`${message} — ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }, []);
 
   // Mirror the scene inputs for the rAF loop, so frames always read the
   // latest committed state.
@@ -49,59 +118,102 @@ export function FeltCanvas({ felt, apply, canvasRef, gestures, className, emptyL
     try {
       renderer = createPrimitiveRenderer(el);
     } catch (err) {
-      console.error("felt renderer: WebGL init failed", err);
+      reportGlError("WebGL init failed", err);
     }
     rendererRef.current = renderer;
     return () => {
       renderer?.dispose();
       rendererRef.current = null;
     };
-  }, [canvasRef]);
+  }, [canvasRef, reportGlError]);
 
   useCanvasRenderLoop(canvasRef, {
-    onResize: (size) => apply((f) => resizeFelt(f, size)),
+    onResize: (size) => {
+      viewportRef.current = size;
+      apply((f) =>
+        resizeFelt(f, {
+          w: Math.max(0, size.w - FELT_INSET.x * 2),
+          h: Math.max(0, size.h - FELT_INSET.top - FELT_INSET.bottom),
+        }),
+      );
+    },
     draw: (time, dpr) => {
       const renderer = rendererRef.current;
       if (!renderer) {
         return;
       }
-      const scene = sceneRef.current;
-      const colors = colorsRef.current;
-      const lift = gestures.stepLift(scene.hover);
-      const fonts = {
-        chip: renderer.font(11, colors.bodyFont, "600", dpr),
-        badge: renderer.font(12, colors.bodyFont, "600", dpr),
-      };
-      const items = buildScene({
-        felt: scene.felt,
-        handPos: scene.handPos,
-        drag: scene.drag,
-        hover: scene.hover,
-        lift,
-        colors,
-        time,
-        fonts,
-      });
-      renderer.render(items, scene.felt.felt.w, scene.felt.felt.h);
+      try {
+        drawFrame(time, dpr, renderer);
+      } catch (err) {
+        reportGlError("draw failed", err);
+      }
     },
   });
 
+  // One frame of the felt scene, factored out so the render loop can catch
+  // and surface GL failures without dying.
+  const drawFrame = (time: number, dpr: number, renderer: PrimitiveRenderer) => {
+    const scene = sceneRef.current;
+    const colors = colorsRef.current;
+    const lift = gestures.stepLift(scene.hover);
+    const fonts = {
+      chip: renderer.font(Math.round(CHIP_SIZE * 0.25), colors.bodyFont, "600", dpr),
+      badge: renderer.font(Math.round(CHIP_SIZE * 0.27), colors.bodyFont, "600", dpr),
+    };
+    const viewport = viewportRef.current;
+    if (viewport.w <= 0 || viewport.h <= 0) {
+      emptyFramesRef.current += 1;
+      if (emptyFramesRef.current > 60) {
+        throw new Error(`viewport is ${viewport.w}x${viewport.h} — resize never ran`);
+      }
+      return;
+    }
+    emptyFramesRef.current = 0;
+    const items = buildScene({
+      felt: scene.felt,
+      surface: { x: -FELT_ORIGIN.x, y: -FELT_ORIGIN.y, w: viewport.w, h: viewport.h },
+      handPos: scene.handPos,
+      drag: scene.drag,
+      hover: scene.hover,
+      lift,
+      colors,
+      time,
+      fonts,
+    });
+    renderer.render(items, viewport.w, viewport.h, {
+      origin: FELT_ORIGIN,
+      feltFade: FELT_FADE,
+      sceneFade: SCENE_FADE,
+      canvasColor: colors.canvasBg,
+      feltColor: colors.felt,
+    });
+  };
+
   return (
-    <div className={`relative overflow-hidden rounded-xl border border-line${className ? ` ${className}` : ""}`}>
+    <div className={`relative${className ? ` ${className}` : ""}`}>
       <canvas
         ref={canvasRef}
-        className="pov-felt absolute inset-0 h-full w-full"
+        className="absolute inset-0 h-full w-full"
         style={{
           cursor: gestures.drag ? "grabbing" : gestures.hover ? "grab" : "default",
           touchAction: "none",
         }}
         {...gestures.canvasHandlers}
       />
+      {glError && (
+        <p className="pointer-events-none absolute left-2 top-2 z-20 max-w-md font-mono text-[10px] leading-tight text-orange-strong">
+          {glError}
+        </p>
+      )}
       {emptyLabel && felt.stacks.length === 0 && !felt.hand && (
-        <p className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-on-felt/50">
+        <p
+          className="pointer-events-none absolute flex items-center justify-center text-sm text-on-felt/50"
+          style={FELT_RECT_STYLE}
+        >
           {emptyLabel}
         </p>
       )}
+      {children}
     </div>
   );
 }

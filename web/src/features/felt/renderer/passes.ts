@@ -5,8 +5,21 @@
 
 import { CHIP_RADIUS, CHIP_SQUASH } from "../world";
 import type { InstanceAttr } from "./gl";
-import type { ChipItem, GlyphItem, PanelItem, RingItem, SceneItem, WallItem } from "./primitives";
-import { CHIP_FS, CHIP_VS, PANEL_FS, PANEL_VS, RING_FS, RING_VS, TEXT_FS, TEXT_VS, WALL_FS, WALL_VS } from "./shaders";
+import type { ChipItem, FeltItem, GlyphItem, PanelItem, RingItem, SceneItem, WallItem } from "./primitives";
+import {
+  CHIP_FS,
+  CHIP_VS,
+  FELT_FS,
+  FELT_VS,
+  PANEL_FS,
+  PANEL_VS,
+  RING_FS,
+  RING_VS,
+  TEXT_FS,
+  TEXT_VS,
+  WALL_FS,
+  WALL_VS,
+} from "./shaders";
 
 /** The primitive kinds a scene can contain. */
 export type Kind = SceneItem["kind"];
@@ -185,10 +198,40 @@ function packGlyph(item: SceneItem, out: Float32Array, o: number): number {
   return o + TEXT_STRIDE;
 }
 
+// --- felt surface ----------------------------------------------------------------
+
+const FELT_ATTRS: InstanceAttr[] = [
+  { name: "iCenter", size: 2 },
+  { name: "iExtent", size: 2 },
+  { name: "iHalfSize", size: 2 },
+  { name: "iRadius", size: 1 },
+  { name: "iFelt", size: 3 },
+  { name: "iFeltDeep", size: 3 },
+];
+const FELT_STRIDE = attrStride(FELT_ATTRS);
+
+function packFelt(item: SceneItem, out: Float32Array, o: number): number {
+  const it = item as FeltItem;
+  const extent = Math.max(it.hw, it.hh) + PANEL_AA_MARGIN;
+
+  out[o] = it.x;
+  out[o + 1] = it.y;
+  out[o + 2] = extent;
+  out[o + 3] = extent;
+  out[o + 4] = it.hw;
+  out[o + 5] = it.hh;
+  out[o + 6] = it.radius;
+  out.set(it.felt, o + 7);
+  out.set(it.feltDeep, o + 10);
+
+  return o + FELT_STRIDE;
+}
+
 // --- the registry ----------------------------------------------------------------
 
 /** One spec per primitive kind; the renderer builds a GL pass from each. */
 export const PASS_SPECS: Record<Kind, PassSpec> = {
+  felt: { vs: FELT_VS, fs: FELT_FS, attrs: FELT_ATTRS, stride: FELT_STRIDE, pack: packFelt },
   ring: { vs: RING_VS, fs: RING_FS, attrs: RING_ATTRS, stride: RING_STRIDE, pack: packRing },
   chip: { vs: CHIP_VS, fs: CHIP_FS, attrs: CHIP_ATTRS, stride: CHIP_STRIDE, pack: packChip },
   wall: { vs: WALL_VS, fs: WALL_FS, attrs: WALL_ATTRS, stride: WALL_STRIDE, pack: packWall },

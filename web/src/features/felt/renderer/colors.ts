@@ -8,6 +8,8 @@ const colorProbe = document.createElement("span");
 export type SceneColors = {
   tiers: { face: RGB; spot: RGB; text: RGB }[];
   onFelt: RGB;
+  felt: RGB;
+  feltDeep: RGB;
   canvasBg: RGB;
   line: RGB;
   ink: RGB;
@@ -34,6 +36,8 @@ export function resolveSceneColors(): SceneColors {
   return {
     tiers,
     onFelt: token("--on-felt"),
+    felt: token("--felt"),
+    feltDeep: token("--felt-deep"),
     canvasBg: token("--canvas"),
     line: token("--line"),
     ink: token("--ink"),

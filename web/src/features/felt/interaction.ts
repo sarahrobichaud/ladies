@@ -1,4 +1,4 @@
-import { type Felt, type Stack, type StackId, stackSize } from "./felt";
+import { type Felt, STACK_HEIGHT_CAP, type Stack, type StackId, stackSize } from "./felt";
 import type { Point } from "./geom";
 import { allSlots, type Slot, slotPosition } from "./lattice";
 import { BUTTON_HALF_HEIGHT, BUTTON_HALF_WIDTH, CHIP_RADIUS, CHIP_SQUASH, STACK_LIFT } from "./world";
@@ -81,10 +81,13 @@ function wallContains(dx: number, dy: number): boolean {
 export type Landing =
   | { type: "combine"; stackId: StackId; slot: Slot; ring: Point }
   | { type: "place"; slot: Slot; ring: Point }
+  | { type: "discard" }
   | { type: "none" };
 
 /**
- * Single authority for the landing preview and the commit; occupied slots never combine implicitly.
+ * Single authority for the landing preview and the commit; occupied slots
+ * never combine implicitly, and drops off the felt discard unless they land
+ * on a stack, whose column may reach above the felt top.
  * @param felt - The felt holding the hand and resting stacks.
  * @param point - The pointer position in felt pixels.
  */
@@ -95,7 +98,8 @@ export function landingFor(felt: Felt, point: Point): Landing {
   }
 
   const target = combineTargetAt(felt, point);
-  if (target) {
+  // A combine that would breach the stack height cap is not offered.
+  if (target && stackSize(target) + hand.chips.length <= STACK_HEIGHT_CAP) {
     const { x, y } = slotPosition(target.slot);
     return {
       type: "combine",
@@ -103,6 +107,11 @@ export function landingFor(felt: Felt, point: Point): Landing {
       slot: target.slot,
       ring: { x, y: y - stackSize(target) * STACK_LIFT },
     };
+  }
+
+  // Off the felt: nowhere to land except the stack top handled above.
+  if (point.x < 0 || point.x > felt.felt.w || point.y < 0 || point.y > felt.felt.h) {
+    return { type: "discard" };
   }
 
   const slot = nearestFreeSlot(felt, point.x, point.y);
@@ -123,7 +132,9 @@ function combineTargetAt(felt: Felt, point: Point): Stack | null {
   for (const stack of felt.stacks) {
     const { x: sx, y: sy } = slotPosition(stack.slot);
     const topY = sy - stackTopOffset(stack);
-    if (point.y < topY - COMBINE_BAND || point.y > topY + 4) {
+    // The whole stack column combines: tall stacks reach above the felt top,
+    // so a drop on any of their chips must merge rather than discard.
+    if (point.y < topY - COMBINE_BAND || point.y > sy + CHIP_RADIUS * CHIP_SQUASH + STACK_LIFT) {
       continue;
     }
 

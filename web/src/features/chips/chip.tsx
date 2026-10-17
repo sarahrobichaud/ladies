@@ -3,8 +3,9 @@ import { chipLabel } from "../../snapshot";
 import { CHIP_TIERS } from "./palette";
 
 // Canonical chip size in px — the felt world adopts this as its scale
-// knob (felt/world.ts derives CHIP_RADIUS from it).
-export const CHIP_SIZE = 44;
+// knob (felt/world.ts derives CHIP_RADIUS from it, and the felt canvas
+// derives its insets, fade zones, and label sizes from the world).
+export const CHIP_SIZE = 70;
 
 export function Chip({
   value,

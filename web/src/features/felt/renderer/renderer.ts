@@ -1,6 +1,7 @@
 // The render front: takes an ordered scene (painter's order) and flushes
 // consecutive same-kind runs as instanced draws, one pass per kind.
 
+import type { Point } from "../geom";
 import { CHIP_RADIUS, CHIP_SQUASH, INNER_DASH, INNER_RING_RADIUS, SPOT_HALF_WIDTH, SPOT_INNER_RADIUS } from "../world";
 import { Batch, createGL, createProgram } from "./gl";
 import { type Kind, PASS_SPECS, type PassSpec } from "./passes";
@@ -13,6 +14,11 @@ type Pass = {
   program: WebGLProgram;
   batch: Batch;
   uResolution: WebGLUniformLocation | null;
+  uOrigin: WebGLUniformLocation | null;
+  uFade: WebGLUniformLocation | null;
+  uFeltFade: WebGLUniformLocation | null;
+  uCanvasColor: WebGLUniformLocation | null;
+  uFeltColor: WebGLUniformLocation | null;
 };
 
 /**
@@ -60,6 +66,11 @@ function buildPass(gl: WebGL2RenderingContext, spec: PassSpec): Pass {
     program,
     batch: new Batch(gl, program, spec.attrs),
     uResolution: gl.getUniformLocation(program, "uResolution"),
+    uOrigin: gl.getUniformLocation(program, "uOrigin"),
+    uFade: gl.getUniformLocation(program, "uFade"),
+    uFeltFade: gl.getUniformLocation(program, "uFeltFade"),
+    uCanvasColor: gl.getUniformLocation(program, "uCanvasColor"),
+    uFeltColor: gl.getUniformLocation(program, "uFeltColor"),
   };
 }
 
@@ -74,6 +85,13 @@ class Renderer {
   private scratch: Record<Kind, Float32Array>;
   private cssW = 0;
   private cssH = 0;
+  private view: FrameView = {
+    origin: { x: 0, y: 0 },
+    feltFade: [-1e9, -1e9],
+    sceneFade: [-1e9, -1e9],
+    canvasColor: [0, 0, 0],
+    feltColor: [0, 0, 0],
+  };
 
   /**
    * Create a renderer: atlas, blend state, one pass per primitive kind,
@@ -93,6 +111,7 @@ class Renderer {
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
     this.passes = {
+      felt: buildPass(gl, PASS_SPECS.felt),
       ring: buildPass(gl, PASS_SPECS.ring),
       chip: buildPass(gl, PASS_SPECS.chip),
       wall: buildPass(gl, PASS_SPECS.wall),
@@ -106,6 +125,7 @@ class Renderer {
     gl.uniform1i(gl.getUniformLocation(text, "uAtlas"), 0);
 
     this.scratch = {
+      felt: new Float32Array(SCRATCH_INSTANCES * PASS_SPECS.felt.stride),
       ring: new Float32Array(SCRATCH_INSTANCES * PASS_SPECS.ring.stride),
       chip: new Float32Array(SCRATCH_INSTANCES * PASS_SPECS.chip.stride),
       wall: new Float32Array(SCRATCH_INSTANCES * PASS_SPECS.wall.stride),
@@ -120,8 +140,9 @@ class Renderer {
    * @param scene - draw items in painter's order
    * @param cssWidth - viewport width in CSS px
    * @param cssHeight - viewport height in CSS px
+   * @param view - scene offset and the two fade zones, in canvas px
    */
-  render(scene: SceneItem[], cssWidth: number, cssHeight: number) {
+  render(scene: SceneItem[], cssWidth: number, cssHeight: number, view: FrameView) {
     if (cssWidth <= 0 || cssHeight <= 0) {
       return;
     }
@@ -129,6 +150,7 @@ class Renderer {
     const gl = this.gl;
     this.cssW = cssWidth;
     this.cssH = cssHeight;
+    this.view = view;
 
     gl.viewport(0, 0, this.canvas.width, this.canvas.height);
     gl.clearColor(0, 0, 0, 0);
@@ -195,6 +217,25 @@ class Renderer {
     if (pass.uResolution) {
       gl.uniform2f(pass.uResolution, this.cssW, this.cssH);
     }
+    if (pass.uOrigin) {
+      gl.uniform2f(pass.uOrigin, this.view.origin.x, this.view.origin.y);
+    }
+    if (pass.uFade) {
+      const fade = kind === "felt" ? this.view.feltFade : this.view.sceneFade;
+      gl.uniform2f(pass.uFade, fade[0], fade[1]);
+    }
+    if (pass.uFeltFade) {
+      const f = this.view.feltFade;
+      gl.uniform2f(pass.uFeltFade, f[0], f[1]);
+    }
+    if (pass.uCanvasColor) {
+      const c = this.view.canvasColor;
+      gl.uniform3f(pass.uCanvasColor, c[0], c[1], c[2]);
+    }
+    if (pass.uFeltColor) {
+      const c = this.view.feltColor;
+      gl.uniform3f(pass.uFeltColor, c[0], c[1], c[2]);
+    }
 
     if (kind === "glyph") {
       gl.activeTexture(gl.TEXTURE0);
@@ -205,10 +246,23 @@ class Renderer {
   }
 }
 
+/** Per-frame view state: the scene offset, both fade zones, and the two
+ *  backdrop colors scene items dissolve into, sampled by height (page
+ *  background above, felt color through the felt's ramp). Fade zones are
+ *  [startY, endY] ramps; the felt zone dissolves the surface by alpha, the
+ *  scene zone tints items into the height-sampled backdrop. */
+export type FrameView = {
+  origin: Point;
+  feltFade: readonly [number, number];
+  sceneFade: readonly [number, number];
+  canvasColor: readonly [number, number, number];
+  feltColor: readonly [number, number, number];
+};
+
 /** The renderer's public face: fonts, frame rendering, disposal. */
 export interface PrimitiveRenderer {
   font(px: number, family: string, weight?: string, scale?: number): FontFace;
-  render(scene: SceneItem[], cssWidth: number, cssHeight: number): void;
+  render(scene: SceneItem[], cssWidth: number, cssHeight: number, view: FrameView): void;
   dispose(): void;
 }
 
@@ -226,7 +280,7 @@ export function createPrimitiveRenderer(canvas: HTMLCanvasElement): PrimitiveRen
   const renderer = new Renderer(gl, canvas);
   return {
     font: (px, family, weight = "600", scale = 1) => renderer.atlas.font(px, family, weight, scale),
-    render: (scene, w, h) => renderer.render(scene, w, h),
+    render: (scene, w, h, view) => renderer.render(scene, w, h, view),
     dispose: () => renderer.dispose(),
   };
 }
