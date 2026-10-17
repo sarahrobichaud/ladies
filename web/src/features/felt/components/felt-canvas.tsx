@@ -138,12 +138,10 @@ export function FeltCanvas({ store, canvasRef, gestures, className, emptyLabel, 
       time,
       fonts,
     });
-    renderer.render(items, viewport.w, viewport.h, {
-      origin: stage.origin,
-      feltFade: stage.feltFade,
-      sceneFade: stage.sceneFade,
-      canvasColor: colors.canvasBg,
-      feltColor: colors.felt,
+    renderer.render(items, {
+      viewport,
+      stage,
+      backdrop: { canvas: colors.canvasBg, felt: colors.felt },
     });
   };
 

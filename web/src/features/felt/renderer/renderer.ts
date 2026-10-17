@@ -1,11 +1,12 @@
 // The render front: takes an ordered scene (painter's order) and flushes
 // consecutive same-kind runs as instanced draws, one pass per kind.
 
-import type { Point } from "../geom";
+import type { Size } from "../geom";
+import type { Stage } from "../stage";
 import { CHIP_RADIUS, CHIP_SQUASH, INNER_DASH, INNER_RING_RADIUS, SPOT_HALF_WIDTH, SPOT_INNER_RADIUS } from "../world";
 import { Batch, createGL, createProgram } from "./gl";
 import { type Kind, PASS_SPECS, type PassSpec } from "./passes";
-import type { SceneItem } from "./primitives";
+import type { RGB, SceneItem } from "./primitives";
 import { type FontFace, GlyphAtlas } from "./text";
 
 /** One compiled pass: its spec, program, instance batch, and cached uniform location. */
@@ -83,15 +84,6 @@ class Renderer {
   readonly atlas: GlyphAtlas;
   private passes: Record<Kind, Pass>;
   private scratch: Record<Kind, Float32Array>;
-  private cssW = 0;
-  private cssH = 0;
-  private view: FrameView = {
-    origin: { x: 0, y: 0 },
-    feltFade: [-1e9, -1e9],
-    sceneFade: [-1e9, -1e9],
-    canvasColor: [0, 0, 0],
-    feltColor: [0, 0, 0],
-  };
 
   /**
    * Create a renderer: atlas, blend state, one pass per primitive kind,
@@ -138,19 +130,15 @@ class Renderer {
    * Render one frame: clear, then batch consecutive same-kind runs in
    * painter's order.
    * @param scene - draw items in painter's order
-   * @param cssWidth - viewport width in CSS px
-   * @param cssHeight - viewport height in CSS px
-   * @param view - scene offset and the two fade zones, in canvas px
+   * @param frame - viewport, canvas layout, and backdrop colors
    */
-  render(scene: SceneItem[], cssWidth: number, cssHeight: number, view: FrameView) {
-    if (cssWidth <= 0 || cssHeight <= 0) {
+  render(scene: SceneItem[], frame: Frame) {
+    const { viewport } = frame;
+    if (viewport.w <= 0 || viewport.h <= 0) {
       return;
     }
 
     const gl = this.gl;
-    this.cssW = cssWidth;
-    this.cssH = cssHeight;
-    this.view = view;
 
     gl.viewport(0, 0, this.canvas.width, this.canvas.height);
     gl.clearColor(0, 0, 0, 0);
@@ -171,7 +159,7 @@ class Renderer {
         i++;
       }
 
-      this.flush(kind, count, offset);
+      this.flush(kind, count, offset, frame);
     }
   }
 
@@ -204,8 +192,9 @@ class Renderer {
    * @param kind - which pass to draw through
    * @param count - instance count in the run
    * @param floats - packed float count in the run's scratch prefix
+   * @param frame - viewport, canvas layout, and backdrop colors for the uniforms
    */
-  private flush(kind: Kind, count: number, floats: number) {
+  private flush(kind: Kind, count: number, floats: number, frame: Frame) {
     if (count === 0) {
       return;
     }
@@ -215,26 +204,27 @@ class Renderer {
 
     gl.useProgram(pass.program);
     if (pass.uResolution) {
-      gl.uniform2f(pass.uResolution, this.cssW, this.cssH);
+      gl.uniform2f(pass.uResolution, frame.viewport.w, frame.viewport.h);
     }
     if (pass.uOrigin) {
-      gl.uniform2f(pass.uOrigin, this.view.origin.x, this.view.origin.y);
+      const origin = frame.stage.origin;
+      gl.uniform2f(pass.uOrigin, origin.x, origin.y);
     }
     if (pass.uFade) {
-      const fade = kind === "felt" ? this.view.feltFade : this.view.sceneFade;
+      const fade = kind === "felt" ? frame.stage.feltFade : frame.stage.sceneFade;
       gl.uniform2f(pass.uFade, fade[0], fade[1]);
     }
     if (pass.uFeltFade) {
-      const f = this.view.feltFade;
-      gl.uniform2f(pass.uFeltFade, f[0], f[1]);
+      const feltFade = frame.stage.feltFade;
+      gl.uniform2f(pass.uFeltFade, feltFade[0], feltFade[1]);
     }
     if (pass.uCanvasColor) {
-      const c = this.view.canvasColor;
-      gl.uniform3f(pass.uCanvasColor, c[0], c[1], c[2]);
+      const canvas = frame.backdrop.canvas;
+      gl.uniform3f(pass.uCanvasColor, canvas[0], canvas[1], canvas[2]);
     }
     if (pass.uFeltColor) {
-      const c = this.view.feltColor;
-      gl.uniform3f(pass.uFeltColor, c[0], c[1], c[2]);
+      const felt = frame.backdrop.felt;
+      gl.uniform3f(pass.uFeltColor, felt[0], felt[1], felt[2]);
     }
 
     if (kind === "glyph") {
@@ -246,23 +236,26 @@ class Renderer {
   }
 }
 
-/** Per-frame view state: the scene offset, both fade zones, and the two
- *  backdrop colors scene items dissolve into, sampled by height (page
- *  background above, felt color through the felt's ramp). Fade zones are
- *  [startY, endY] ramps; the felt zone dissolves the surface by alpha, the
- *  scene zone tints items into the height-sampled backdrop. */
-export type FrameView = {
-  origin: Point;
-  feltFade: readonly [number, number];
-  sceneFade: readonly [number, number];
-  canvasColor: readonly [number, number, number];
-  feltColor: readonly [number, number, number];
+/** Backdrop colors scene items dissolve into when fading, sampled by height
+ *  (page background above, felt color through the felt's ramp). */
+export type Backdrop = {
+  canvas: RGB;
+  felt: RGB;
+};
+
+/** Everything one render call needs besides the scene itself: the viewport,
+ *  the canvas layout authority (felt origin and fade bands, in canvas px),
+ *  and the backdrop the fade dissolves into. */
+export type Frame = {
+  viewport: Size;
+  stage: Stage;
+  backdrop: Backdrop;
 };
 
 /** The renderer's public face: fonts, frame rendering, disposal. */
 export interface PrimitiveRenderer {
   font(px: number, family: string, weight?: string, scale?: number): FontFace;
-  render(scene: SceneItem[], cssWidth: number, cssHeight: number, view: FrameView): void;
+  render(scene: SceneItem[], frame: Frame): void;
   dispose(): void;
 }
 
@@ -280,7 +273,7 @@ export function createPrimitiveRenderer(canvas: HTMLCanvasElement): PrimitiveRen
   const renderer = new Renderer(gl, canvas);
   return {
     font: (px, family, weight = "600", scale = 1) => renderer.atlas.font(px, family, weight, scale),
-    render: (scene, w, h, view) => renderer.render(scene, w, h, view),
+    render: (scene, frame) => renderer.render(scene, frame),
     dispose: () => renderer.dispose(),
   };
 }
