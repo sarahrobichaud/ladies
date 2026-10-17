@@ -1,19 +1,9 @@
-import {
-  type CSSProperties,
-  type PointerEvent as ReactPointerEvent,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { type CSSProperties, type PointerEvent as ReactPointerEvent, useEffect, useMemo, useState } from "react";
 import { CHIP_SIZE, Chip } from "../features/chips/chip";
 import type { Catalog } from "../features/chips/types";
 import { FeltCanvas } from "../features/felt/components/felt-canvas";
 import { clearZone, zoneStackValue } from "../features/felt/felt";
-import { useFeltStore } from "../features/felt/hooks/use-felt";
-import { useFeltGestures } from "../features/felt/hooks/use-felt-gestures";
-import { stage } from "../features/felt/stage";
-import { useFeltState } from "../features/felt/store";
+import { useFeltTable } from "../features/felt/hooks/use-felt-table";
 import type { ZoneSpec } from "../features/felt/zones";
 import type { HandSnapshot, PlayerSnapshot } from "../snapshot";
 import { formatChips } from "../snapshot";
@@ -113,10 +103,8 @@ export function ActionDeck({
   // catalog is scaled to the blinds so the tray holds usable denominations.
   const { small, big } = hand.blinds;
   const catalog = useMemo(() => blindsCatalog({ small, big }), [small, big]);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const store = useFeltStore(catalog, TABLE_LAYOUT);
-  const felt = useFeltState(store);
-  const gestures = useFeltGestures({ store, canvasRef, stage });
+  const table = useFeltTable({ catalog, layout: TABLE_LAYOUT });
+  const { felt, store, gestures } = table;
 
   const staged = zoneStackValue(felt, BET_ZONE_ID);
   const plan = commitPlan(staged, player, facingBet, callAmount, hand.min_raise);
@@ -183,7 +171,7 @@ export function ActionDeck({
   return (
     <div className="grid h-[50dvh] shrink-0 grid-cols-[1fr_18rem] gap-4">
       {/* ------------------------------------------------ POV felt (left) */}
-      <FeltCanvas store={store} canvasRef={canvasRef} gestures={gestures} className="min-h-0">
+      <FeltCanvas table={table} className="min-h-0">
         {/* Facing bet / state readout at the far edge of the felt */}
         <div className="pointer-events-none absolute inset-x-0 top-0 z-0 flex flex-col items-center gap-1 pt-2">
           {facingBet ? (

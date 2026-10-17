@@ -1,6 +1,5 @@
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, RefObject } from "react";
 import { useRef, useSyncExternalStore } from "react";
-import { useLatestRef } from "../../../hooks/use-latest-ref";
 import type { KindId } from "../../chips/types";
 import {
   commitHand,
@@ -85,8 +84,6 @@ export type FeltGesturesOptions = {
   stage: Stage;
   /** Ref for the canvas element the gestures are bound to. */
   canvasRef: RefObject<HTMLCanvasElement | null>;
-  /** Semantic action sink; the hook wrapper keeps this reference stable. */
-  onAction?: (action: FeltAction) => void;
 };
 
 /** The felt's gesture controller: mutable frame state plus stable handlers. */
@@ -103,7 +100,7 @@ export type FeltGestures = {
   attach(canvas: HTMLCanvasElement): () => void;
   /** Clears all transient gesture state, including the hand position. */
   reset(): void;
-  /** Semantic action sink, fired after picks, drops, discards, spawns, and bets. */
+  /** Semantic action sink; assign to react to picks, drops, discards, spawns, and bets. */
   onAction?: (action: FeltAction) => void;
   /** Pointer handlers for the felt canvas element. */
   readonly canvasHandlers: CanvasHandlers;
@@ -117,16 +114,17 @@ export type FeltGestures = {
 /**
  * Creates the felt gesture controller. Frame state lives in plain variables
  * that the render loop reads directly; React only subscribes to the cursor.
- * @param options - felt store, canvas layout, canvas ref, and action sink
+ * @param options - felt store, canvas layout, and canvas ref
  * @returns the controller with handlers, frame access, and lifecycle
  */
-export function createFeltGestures({ store, stage, canvasRef, onAction }: FeltGesturesOptions): FeltGestures {
+export function createFeltGestures({ store, stage, canvasRef }: FeltGesturesOptions): FeltGestures {
   let handPos: Point | null = null;
   let drag: Drag | null = null;
   let spawn: Spawn | null = null;
   let hover: Pick | null = null;
   let lift: Lift | null = null;
   let cursor: FeltCursor = "default";
+  let onAction: ((action: FeltAction) => void) | undefined;
 
   const listeners = new Set<() => void>();
   const frameView: GestureFrame = { handPos: null, drag: null, hover: null };
@@ -457,7 +455,12 @@ export function createFeltGestures({ store, stage, canvasRef, onAction }: FeltGe
       setHover(null);
       handPos = null;
     },
-    onAction,
+    get onAction() {
+      return onAction;
+    },
+    set onAction(sink) {
+      onAction = sink;
+    },
     canvasHandlers,
     trayHandlers: (kind: KindId): TrayHandlers => ({
       onPointerDown: onTrayPointerDown(kind),
@@ -469,21 +472,14 @@ export function createFeltGestures({ store, stage, canvasRef, onAction }: FeltGe
 }
 
 /**
- * Owns one gesture controller for the component's lifetime; the action sink
- * is refreshed every render so callers can pass an inline callback.
- * @param options - felt store, canvas layout, canvas ref, and action sink
+ * Owns one gesture controller for the component's lifetime.
+ * @param options - felt store, canvas layout, and canvas ref
  * @returns the gesture controller
  */
-export function useFeltGestures(
-  options: FeltGesturesOptions & { onAction?: (action: FeltAction) => void },
-): FeltGestures {
-  const onActionRef = useLatestRef(options.onAction);
+export function useFeltGestures(options: FeltGesturesOptions): FeltGestures {
   const ref = useRef<FeltGestures | null>(null);
   if (ref.current === null) {
-    ref.current = createFeltGestures({
-      ...options,
-      onAction: (action) => onActionRef.current?.(action),
-    });
+    ref.current = createFeltGestures(options);
   }
   return ref.current;
 }

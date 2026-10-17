@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useState } from "react";
 import { Link } from "react-router";
 import { CATALOG } from "../features/chips/catalog";
 import { Chip } from "../features/chips/chip";
@@ -15,12 +15,10 @@ import {
   spawnStack,
   totalValue,
 } from "../features/felt/felt";
-import { useFeltStore } from "../features/felt/hooks/use-felt";
-import { type FeltAction, useFeltGestures } from "../features/felt/hooks/use-felt-gestures";
+import type { FeltAction } from "../features/felt/hooks/use-felt-gestures";
+import { useFeltTable } from "../features/felt/hooks/use-felt-table";
 import { nearestFreeSlot } from "../features/felt/interaction";
 import { allSlots } from "../features/felt/lattice";
-import { stage } from "../features/felt/stage";
-import { useFeltState } from "../features/felt/store";
 import { FREE_LAYOUT, type ZoneSpec } from "../features/felt/zones";
 import { chipLabel, formatChips } from "../snapshot";
 
@@ -54,18 +52,16 @@ function randomRuns(catalog: Catalog): Run[] {
 }
 
 export function ChipLabPage() {
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const store = useFeltStore(CATALOG, POKER_LAYOUT);
-  const felt = useFeltState(store);
+  const table = useFeltTable({ catalog: CATALOG, layout: POKER_LAYOUT });
+  const { felt, store, gestures } = table;
   const [layoutName, setLayoutName] = useState<"free" | "poker">("poker");
   const [lastAction, setLastAction] = useState<string | null>(null);
-  const onAction = (action: FeltAction) => {
+  gestures.onAction = (action: FeltAction) => {
     if (action.type === "bet") {
       setLastAction(`Bet ${formatChips(action.value)} committed from ${action.zoneId}`);
       store.apply((f) => clearZone(f, action.zoneId));
     }
   };
-  const gestures = useFeltGestures({ store, canvasRef, stage, onAction });
   const [notation, setNotation] = useState("");
   const [notationError, setNotationError] = useState<string | null>(null);
 
@@ -180,13 +176,7 @@ export function ChipLabPage() {
 
       <div className="flex min-h-0 flex-1 gap-4">
         <ChipTray catalog={felt.catalog} trayHandlers={gestures.trayHandlers} />
-        <FeltCanvas
-          store={store}
-          canvasRef={canvasRef}
-          gestures={gestures}
-          className="min-h-0 flex-1"
-          emptyLabel="Empty felt — add chips from the tray"
-        />
+        <FeltCanvas table={table} className="min-h-0 flex-1" emptyLabel="Empty felt — add chips from the tray" />
       </div>
     </div>
   );

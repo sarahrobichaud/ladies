@@ -1,15 +1,7 @@
-import type { CSSProperties, ReactNode, RefObject } from "react";
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useCanvasRenderLoop } from "../../../hooks/use-canvas-render-loop";
-import { CHIP_SIZE } from "../../chips/chip";
-import { setFelt as resizeFelt } from "../felt";
-import type { Size } from "../geom";
-import { type FeltGestures, useFeltCursor } from "../hooks/use-felt-gestures";
-import { useSceneColors } from "../hooks/use-scene-colors";
-import { createPrimitiveRenderer, type PrimitiveRenderer } from "../renderer/renderer";
-import { buildScene } from "../renderer/scene";
-import { feltSize, stage, washRect } from "../stage";
-import { type FeltStore, useFeltState } from "../store";
+import type { CSSProperties, ReactNode } from "react";
+import { useFeltCursor } from "../hooks/use-felt-gestures";
+import type { FeltTable } from "../hooks/use-felt-table";
+import { stage } from "../stage";
 
 /** Where the felt surface, and overlays anchored to it, sit in the container. */
 const FELT_RECT_STYLE: CSSProperties = {
@@ -20,12 +12,8 @@ const FELT_RECT_STYLE: CSSProperties = {
 };
 
 type FeltCanvasProps = {
-  /** Felt state store; the render loop reads it directly, overlays subscribe. */
-  store: FeltStore;
-  /** Ref for the canvas element; must be shared with the gesture controller. */
-  canvasRef: RefObject<HTMLCanvasElement | null>;
-  /** Gesture controller bound to the same canvasRef. */
-  gestures: FeltGestures;
+  /** The felt table owning the store, gestures, and render loop. */
+  table: FeltTable;
   className?: string;
   /** Shown when the felt holds no stacks and no hand. */
   emptyLabel?: string;
@@ -34,116 +22,15 @@ type FeltCanvasProps = {
 };
 
 /**
- * The felt canvas block: a WebGL-rendered chip felt driven by the felt store,
- * with pointer interactions handled by the injected gesture controller. The
- * canvas is the full viewport; the felt surface is an inset region of it,
- * rendered in GL with a double-layer fade (the felt dissolves before the
- * chips riding on it do), so stacks rise off the felt without a hard cut.
- * @param props - felt store, canvas ref, gestures, chrome, and overlays
+ * The felt canvas block: a presentational shell over a FeltTable. The canvas
+ * is the full viewport; the felt surface is an inset region of it, rendered
+ * in GL with a double-layer fade (the felt dissolves before the chips riding
+ * on it do), so stacks rise off the felt without a hard cut.
+ * @param props - the felt table plus chrome and overlays
  */
-export function FeltCanvas({ store, canvasRef, gestures, className, emptyLabel, children }: FeltCanvasProps) {
-  const felt = useFeltState(store);
+export function FeltCanvas({ table, className, emptyLabel, children }: FeltCanvasProps) {
+  const { felt, gestures, canvasRef, glError } = table;
   const cursor = useFeltCursor(gestures);
-  const rendererRef = useRef<PrimitiveRenderer | null>(null);
-  const colorsRef = useSceneColors();
-  const viewportRef = useRef<Size>({ w: 0, h: 0 });
-  // First GL failure (init or draw), surfaced in the DOM until reloaded.
-  const [glError, setGlError] = useState<string | null>(null);
-  const reportedRef = useRef(false);
-  // Frames drawn before the ResizeObserver's first callback; it fires after
-  // the loop starts, so an empty viewport is normal for the first frames.
-  const emptyFramesRef = useRef(0);
-  const reportGlError = useCallback((message: string, err: unknown) => {
-    console.error(`felt canvas: ${message}`, err);
-    if (!reportedRef.current) {
-      reportedRef.current = true;
-      setGlError(`${message} — ${err instanceof Error ? err.message : String(err)}`);
-    }
-  }, []);
-
-  // Renderer lifecycle: created once per canvas, disposed on unmount.
-  useEffect(() => {
-    const el = canvasRef.current;
-    if (!el) {
-      return;
-    }
-    let renderer: PrimitiveRenderer | null = null;
-    try {
-      renderer = createPrimitiveRenderer(el);
-    } catch (err) {
-      reportGlError("WebGL init failed", err);
-    }
-    rendererRef.current = renderer;
-    return () => {
-      renderer?.dispose();
-      rendererRef.current = null;
-    };
-  }, [canvasRef, reportGlError]);
-
-  // Native wheel handling lives on the gesture controller (React's wheel is
-  // passive, so preventDefault needs a raw listener).
-  useEffect(() => {
-    const el = canvasRef.current;
-    if (!el) {
-      return;
-    }
-    return gestures.attach(el);
-  }, [gestures, canvasRef]);
-
-  useCanvasRenderLoop(canvasRef, {
-    onResize: (size) => {
-      viewportRef.current = size;
-      store.apply((f) => resizeFelt(f, feltSize(stage, size)));
-    },
-    draw: (time, dpr) => {
-      const renderer = rendererRef.current;
-      if (!renderer) {
-        return;
-      }
-      try {
-        drawFrame(time, dpr, renderer);
-      } catch (err) {
-        reportGlError("draw failed", err);
-      }
-    },
-  });
-
-  // One frame of the felt scene, factored out so the render loop can catch
-  // and surface GL failures without dying.
-  const drawFrame = (time: number, dpr: number, renderer: PrimitiveRenderer) => {
-    const colors = colorsRef.current;
-    const { handPos, drag, hover } = gestures.frame();
-    const lift = gestures.stepLift();
-    const fonts = {
-      chip: renderer.font(Math.round(CHIP_SIZE * 0.25), colors.bodyFont, "600", dpr),
-      badge: renderer.font(Math.round(CHIP_SIZE * 0.27), colors.bodyFont, "600", dpr),
-    };
-    const viewport = viewportRef.current;
-    if (viewport.w <= 0 || viewport.h <= 0) {
-      emptyFramesRef.current += 1;
-      if (emptyFramesRef.current > 60) {
-        throw new Error(`viewport is ${viewport.w}x${viewport.h} — resize never ran`);
-      }
-      return;
-    }
-    emptyFramesRef.current = 0;
-    const items = buildScene({
-      felt: store.get(),
-      surface: washRect(stage, viewport),
-      handPos,
-      drag,
-      hover,
-      lift,
-      colors,
-      time,
-      fonts,
-    });
-    renderer.render(items, {
-      viewport,
-      stage,
-      backdrop: { canvas: colors.canvasBg, felt: colors.felt },
-    });
-  };
 
   return (
     <div className={`relative${className ? ` ${className}` : ""}`}>
