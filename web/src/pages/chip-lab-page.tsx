@@ -15,11 +15,12 @@ import {
   spawnStack,
   totalValue,
 } from "../features/felt/felt";
-import { useFelt } from "../features/felt/hooks/use-felt";
+import { useFeltStore } from "../features/felt/hooks/use-felt";
 import { type FeltAction, useFeltGestures } from "../features/felt/hooks/use-felt-gestures";
 import { nearestFreeSlot } from "../features/felt/interaction";
 import { allSlots } from "../features/felt/lattice";
 import { stage } from "../features/felt/stage";
+import { useFeltState } from "../features/felt/store";
 import { FREE_LAYOUT, type ZoneSpec } from "../features/felt/zones";
 import { chipLabel, formatChips } from "../snapshot";
 
@@ -54,23 +55,24 @@ function randomRuns(catalog: Catalog): Run[] {
 
 export function ChipLabPage() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const { felt, apply } = useFelt(CATALOG, POKER_LAYOUT);
+  const store = useFeltStore(CATALOG, POKER_LAYOUT);
+  const felt = useFeltState(store);
   const [layoutName, setLayoutName] = useState<"free" | "poker">("poker");
   const [lastAction, setLastAction] = useState<string | null>(null);
   const onAction = (action: FeltAction) => {
     if (action.type === "bet") {
       setLastAction(`Bet ${formatChips(action.value)} committed from ${action.zoneId}`);
-      apply((f) => clearZone(f, action.zoneId));
+      store.apply((f) => clearZone(f, action.zoneId));
     }
   };
-  const gestures = useFeltGestures({ felt, apply, canvasRef, stage, onAction });
+  const gestures = useFeltGestures({ store, canvasRef, stage, onAction });
   const [notation, setNotation] = useState("");
   const [notationError, setNotationError] = useState<string | null>(null);
 
   const toggleLayout = () => {
     const next = layoutName === "free" ? POKER_LAYOUT : FREE_LAYOUT;
     setLayoutName(layoutName === "free" ? "poker" : "free");
-    apply((f) => setFeltLayout(f, next));
+    store.apply((f) => setFeltLayout(f, next));
   };
 
   const total = totalValue(felt);
@@ -78,7 +80,7 @@ export function ChipLabPage() {
   // Fill every lattice slot with a random stack — worst case for the
   // renderer (max stacks × max chips) and for pick/landing hit-testing.
   const stressTest = () => {
-    apply((felt) => {
+    store.apply((felt) => {
       let next = clearBoard(felt);
       const slots = allSlots(next.felt);
       for (let i = slots.length - 1; i > 0; i--) {
@@ -101,7 +103,7 @@ export function ChipLabPage() {
         setNotationError("the felt is full");
         return;
       }
-      apply((f) => spawnStack(f, runs, slot));
+      store.apply((f) => spawnStack(f, runs, slot));
       setNotation("");
       setNotationError(null);
     } catch (err) {
@@ -155,7 +157,7 @@ export function ChipLabPage() {
           <button
             type="button"
             className="rounded-md border border-line bg-raised px-3 py-1.5 text-sm text-ink hover:bg-blue-tint"
-            onClick={() => apply(clearBoard)}
+            onClick={() => store.apply(clearBoard)}
           >
             Clear table
           </button>
@@ -179,8 +181,7 @@ export function ChipLabPage() {
       <div className="flex min-h-0 flex-1 gap-4">
         <ChipTray catalog={felt.catalog} trayHandlers={gestures.trayHandlers} />
         <FeltCanvas
-          felt={felt}
-          apply={apply}
+          store={store}
           canvasRef={canvasRef}
           gestures={gestures}
           className="min-h-0 flex-1"

@@ -1,15 +1,15 @@
 import type { CSSProperties, ReactNode, RefObject } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useCanvasRenderLoop } from "../../../hooks/use-canvas-render-loop";
-import { useLatestRef } from "../../../hooks/use-latest-ref";
 import { CHIP_SIZE } from "../../chips/chip";
-import { type Felt, setFelt as resizeFelt } from "../felt";
+import { setFelt as resizeFelt } from "../felt";
 import type { Size } from "../geom";
-import type { FeltGestures } from "../hooks/use-felt-gestures";
+import { type FeltGestures, useFeltCursor } from "../hooks/use-felt-gestures";
 import { useSceneColors } from "../hooks/use-scene-colors";
 import { createPrimitiveRenderer, type PrimitiveRenderer } from "../renderer/renderer";
 import { buildScene } from "../renderer/scene";
 import { feltSize, stage, washRect } from "../stage";
+import { type FeltStore, useFeltState } from "../store";
 
 /** Where the felt surface, and overlays anchored to it, sit in the container. */
 const FELT_RECT_STYLE: CSSProperties = {
@@ -20,12 +20,11 @@ const FELT_RECT_STYLE: CSSProperties = {
 };
 
 type FeltCanvasProps = {
-  felt: Felt;
-  /** Stable dispatcher for the pure felt ops (from useFelt). */
-  apply: (op: (felt: Felt) => Felt) => void;
-  /** Ref for the canvas element; must be shared with useFeltGestures. */
+  /** Felt state store; the render loop reads it directly, overlays subscribe. */
+  store: FeltStore;
+  /** Ref for the canvas element; must be shared with the gesture controller. */
   canvasRef: RefObject<HTMLCanvasElement | null>;
-  /** Gesture state machine from useFeltGestures, bound to the same canvasRef. */
+  /** Gesture controller bound to the same canvasRef. */
   gestures: FeltGestures;
   className?: string;
   /** Shown when the felt holds no stacks and no hand. */
@@ -35,14 +34,16 @@ type FeltCanvasProps = {
 };
 
 /**
- * The felt canvas block: a WebGL-rendered chip felt driven by felt state,
- * with pointer interactions handled by the injected gesture machine. The
+ * The felt canvas block: a WebGL-rendered chip felt driven by the felt store,
+ * with pointer interactions handled by the injected gesture controller. The
  * canvas is the full viewport; the felt surface is an inset region of it,
- * rendered in GL with a double-layer fade — the felt dissolves before the
- * chips riding on it do — so stacks rise off the felt without a hard cut.
- * @param props - felt state, op dispatcher, canvas ref, gestures, chrome, and overlays
+ * rendered in GL with a double-layer fade (the felt dissolves before the
+ * chips riding on it do), so stacks rise off the felt without a hard cut.
+ * @param props - felt store, canvas ref, gestures, chrome, and overlays
  */
-export function FeltCanvas({ felt, apply, canvasRef, gestures, className, emptyLabel, children }: FeltCanvasProps) {
+export function FeltCanvas({ store, canvasRef, gestures, className, emptyLabel, children }: FeltCanvasProps) {
+  const felt = useFeltState(store);
+  const cursor = useFeltCursor(gestures);
   const rendererRef = useRef<PrimitiveRenderer | null>(null);
   const colorsRef = useSceneColors();
   const viewportRef = useRef<Size>({ w: 0, h: 0 });
@@ -59,15 +60,6 @@ export function FeltCanvas({ felt, apply, canvasRef, gestures, className, emptyL
       setGlError(`${message} — ${err instanceof Error ? err.message : String(err)}`);
     }
   }, []);
-
-  // Mirror the scene inputs for the rAF loop, so frames always read the
-  // latest committed state.
-  const sceneRef = useLatestRef({
-    felt,
-    handPos: gestures.handPos,
-    drag: gestures.drag,
-    hover: gestures.hover,
-  });
 
   // Renderer lifecycle: created once per canvas, disposed on unmount.
   useEffect(() => {
@@ -88,10 +80,20 @@ export function FeltCanvas({ felt, apply, canvasRef, gestures, className, emptyL
     };
   }, [canvasRef, reportGlError]);
 
+  // Native wheel handling lives on the gesture controller (React's wheel is
+  // passive, so preventDefault needs a raw listener).
+  useEffect(() => {
+    const el = canvasRef.current;
+    if (!el) {
+      return;
+    }
+    return gestures.attach(el);
+  }, [gestures, canvasRef]);
+
   useCanvasRenderLoop(canvasRef, {
     onResize: (size) => {
       viewportRef.current = size;
-      apply((f) => resizeFelt(f, feltSize(stage, size)));
+      store.apply((f) => resizeFelt(f, feltSize(stage, size)));
     },
     draw: (time, dpr) => {
       const renderer = rendererRef.current;
@@ -109,9 +111,9 @@ export function FeltCanvas({ felt, apply, canvasRef, gestures, className, emptyL
   // One frame of the felt scene, factored out so the render loop can catch
   // and surface GL failures without dying.
   const drawFrame = (time: number, dpr: number, renderer: PrimitiveRenderer) => {
-    const scene = sceneRef.current;
     const colors = colorsRef.current;
-    const lift = gestures.stepLift(scene.hover);
+    const { handPos, drag, hover } = gestures.frame();
+    const lift = gestures.stepLift();
     const fonts = {
       chip: renderer.font(Math.round(CHIP_SIZE * 0.25), colors.bodyFont, "600", dpr),
       badge: renderer.font(Math.round(CHIP_SIZE * 0.27), colors.bodyFont, "600", dpr),
@@ -126,11 +128,11 @@ export function FeltCanvas({ felt, apply, canvasRef, gestures, className, emptyL
     }
     emptyFramesRef.current = 0;
     const items = buildScene({
-      felt: scene.felt,
+      felt: store.get(),
       surface: washRect(stage, viewport),
-      handPos: scene.handPos,
-      drag: scene.drag,
-      hover: scene.hover,
+      handPos,
+      drag,
+      hover,
       lift,
       colors,
       time,
@@ -151,7 +153,7 @@ export function FeltCanvas({ felt, apply, canvasRef, gestures, className, emptyL
         ref={canvasRef}
         className="absolute inset-0 h-full w-full"
         style={{
-          cursor: gestures.drag ? "grabbing" : gestures.hover ? "grab" : "default",
+          cursor,
           touchAction: "none",
         }}
         {...gestures.canvasHandlers}

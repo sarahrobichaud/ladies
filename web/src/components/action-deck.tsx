@@ -10,9 +10,10 @@ import { CHIP_SIZE, Chip } from "../features/chips/chip";
 import type { Catalog } from "../features/chips/types";
 import { FeltCanvas } from "../features/felt/components/felt-canvas";
 import { clearZone, zoneStackValue } from "../features/felt/felt";
-import { useFelt } from "../features/felt/hooks/use-felt";
+import { useFeltStore } from "../features/felt/hooks/use-felt";
 import { useFeltGestures } from "../features/felt/hooks/use-felt-gestures";
 import { stage } from "../features/felt/stage";
+import { useFeltState } from "../features/felt/store";
 import type { ZoneSpec } from "../features/felt/zones";
 import type { HandSnapshot, PlayerSnapshot } from "../snapshot";
 import { formatChips } from "../snapshot";
@@ -113,8 +114,9 @@ export function ActionDeck({
   const { small, big } = hand.blinds;
   const catalog = useMemo(() => blindsCatalog({ small, big }), [small, big]);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const { felt, apply } = useFelt(catalog, TABLE_LAYOUT);
-  const gestures = useFeltGestures({ felt, apply, canvasRef, stage });
+  const store = useFeltStore(catalog, TABLE_LAYOUT);
+  const felt = useFeltState(store);
+  const gestures = useFeltGestures({ store, canvasRef, stage });
 
   const staged = zoneStackValue(felt, BET_ZONE_ID);
   const plan = commitPlan(staged, player, facingBet, callAmount, hand.min_raise);
@@ -128,14 +130,14 @@ export function ActionDeck({
       return;
     }
     setFeltEpoch(epoch);
-    apply((f) => clearZone(f, BET_ZONE_ID));
-  }, [epoch, feltEpoch, apply]);
+    store.apply((f) => clearZone(f, BET_ZONE_ID));
+  }, [epoch, feltEpoch, store]);
 
   const commit = () => {
     if (!live || !plan?.ok) {
       return;
     }
-    apply((f) => clearZone(f, BET_ZONE_ID));
+    store.apply((f) => clearZone(f, BET_ZONE_ID));
     onAct(plan.kind, plan.raiseTo);
   };
 
@@ -181,7 +183,7 @@ export function ActionDeck({
   return (
     <div className="grid h-[50dvh] shrink-0 grid-cols-[1fr_18rem] gap-4">
       {/* ------------------------------------------------ POV felt (left) */}
-      <FeltCanvas felt={felt} apply={apply} canvasRef={canvasRef} gestures={gestures} className="min-h-0">
+      <FeltCanvas store={store} canvasRef={canvasRef} gestures={gestures} className="min-h-0">
         {/* Facing bet / state readout at the far edge of the felt */}
         <div className="pointer-events-none absolute inset-x-0 top-0 z-0 flex flex-col items-center gap-1 pt-2">
           {facingBet ? (
@@ -286,7 +288,7 @@ export function ActionDeck({
                 <button
                   type="button"
                   className="rounded-md border border-line bg-surface px-3 py-2 text-sm text-ink hover:bg-blue-tint"
-                  onClick={() => apply((f) => clearZone(f, BET_ZONE_ID))}
+                  onClick={() => store.apply((f) => clearZone(f, BET_ZONE_ID))}
                 >
                   Clear
                 </button>

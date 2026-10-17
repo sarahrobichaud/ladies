@@ -1,17 +1,19 @@
-import { useState } from "react";
+import { useRef } from "react";
 import type { Catalog } from "../../chips/types";
-import { createBoard, type Felt } from "../felt";
+import { createFeltStore, type FeltStore } from "../store";
 import { FREE_LAYOUT, type ZoneSpec } from "../zones";
 
 /**
- * Owns the felt state and exposes a stable dispatcher for the pure felt
- * model ops.
+ * Owns one felt store for the component's lifetime; later catalog or layout
+ * arguments are ignored, matching the previous create-once behavior.
  * @param catalog - the chip catalog the felt plays with
  * @param layout - the zone layout to start with
- * @returns the current felt and a stable op dispatcher
+ * @returns the felt store to apply ops to and subscribe to
  */
-export function useFelt(catalog: Catalog, layout: readonly ZoneSpec[] = FREE_LAYOUT) {
-  const [felt, setFelt] = useState<Felt>(() => createBoard(catalog, { w: 0, h: 0 }, layout));
-  const apply = (op: (felt: Felt) => Felt) => setFelt(op);
-  return { felt, apply };
+export function useFeltStore(catalog: Catalog, layout: readonly ZoneSpec[] = FREE_LAYOUT): FeltStore {
+  const ref = useRef<FeltStore | null>(null);
+  if (ref.current === null) {
+    ref.current = createFeltStore(catalog, layout);
+  }
+  return ref.current;
 }
