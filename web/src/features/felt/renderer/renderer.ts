@@ -16,7 +16,7 @@ type Pass = {
   batch: Batch;
   uResolution: WebGLUniformLocation | null;
   uOrigin: WebGLUniformLocation | null;
-  uFade: WebGLUniformLocation | null;
+  uSceneFade: WebGLUniformLocation | null;
   uFeltFade: WebGLUniformLocation | null;
   uCanvasColor: WebGLUniformLocation | null;
   uFeltColor: WebGLUniformLocation | null;
@@ -68,7 +68,7 @@ function buildPass(gl: WebGL2RenderingContext, spec: PassSpec): Pass {
     batch: new Batch(gl, program, spec.attrs),
     uResolution: gl.getUniformLocation(program, "uResolution"),
     uOrigin: gl.getUniformLocation(program, "uOrigin"),
-    uFade: gl.getUniformLocation(program, "uFade"),
+    uSceneFade: gl.getUniformLocation(program, "uSceneFade"),
     uFeltFade: gl.getUniformLocation(program, "uFeltFade"),
     uCanvasColor: gl.getUniformLocation(program, "uCanvasColor"),
     uFeltColor: gl.getUniformLocation(program, "uFeltColor"),
@@ -102,28 +102,20 @@ class Renderer {
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
-    this.passes = {
-      felt: buildPass(gl, PASS_SPECS.felt),
-      ring: buildPass(gl, PASS_SPECS.ring),
-      chip: buildPass(gl, PASS_SPECS.chip),
-      wall: buildPass(gl, PASS_SPECS.wall),
-      panel: buildPass(gl, PASS_SPECS.panel),
-      glyph: buildPass(gl, PASS_SPECS.glyph),
-    };
+    // One pass and one scratch buffer per registered kind, both derived from
+    // PASS_SPECS so adding a primitive touches only the registry.
+    this.passes = Object.fromEntries(
+      Object.entries(PASS_SPECS).map(([kind, spec]) => [kind, buildPass(gl, spec)]),
+    ) as Record<Kind, Pass>;
 
     // The atlas sampler is a fixed unit; bind it to texture slot 0 once.
     const text = this.passes.glyph.program;
     gl.useProgram(text);
     gl.uniform1i(gl.getUniformLocation(text, "uAtlas"), 0);
 
-    this.scratch = {
-      felt: new Float32Array(SCRATCH_INSTANCES * PASS_SPECS.felt.stride),
-      ring: new Float32Array(SCRATCH_INSTANCES * PASS_SPECS.ring.stride),
-      chip: new Float32Array(SCRATCH_INSTANCES * PASS_SPECS.chip.stride),
-      wall: new Float32Array(SCRATCH_INSTANCES * PASS_SPECS.wall.stride),
-      panel: new Float32Array(SCRATCH_INSTANCES * PASS_SPECS.panel.stride),
-      glyph: new Float32Array(SCRATCH_INSTANCES * PASS_SPECS.glyph.stride),
-    };
+    this.scratch = Object.fromEntries(
+      Object.entries(PASS_SPECS).map(([kind, spec]) => [kind, new Float32Array(SCRATCH_INSTANCES * spec.stride)]),
+    ) as Record<Kind, Float32Array>;
   }
 
   /**
@@ -210,9 +202,9 @@ class Renderer {
       const origin = frame.stage.origin;
       gl.uniform2f(pass.uOrigin, origin.x, origin.y);
     }
-    if (pass.uFade) {
-      const fade = kind === "felt" ? frame.stage.feltFade : frame.stage.sceneFade;
-      gl.uniform2f(pass.uFade, fade[0], fade[1]);
+    if (pass.uSceneFade) {
+      const sceneFade = frame.stage.sceneFade;
+      gl.uniform2f(pass.uSceneFade, sceneFade[0], sceneFade[1]);
     }
     if (pass.uFeltFade) {
       const feltFade = frame.stage.feltFade;
@@ -227,7 +219,7 @@ class Renderer {
       gl.uniform3f(pass.uFeltColor, felt[0], felt[1], felt[2]);
     }
 
-    if (kind === "glyph") {
+    if (pass.spec.atlas) {
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, this.atlas.texture);
     }

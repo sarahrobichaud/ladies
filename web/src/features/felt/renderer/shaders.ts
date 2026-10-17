@@ -17,13 +17,34 @@
 // (hairline widths, highlight offset, the inner-ring dash period) stay
 // baked: they tune crispness, not world scale.
 //
-// Every pass fades by canvas-space y through uFade = [startY, endY]. The
-// felt surface fades by alpha (it is the bottom layer). Scene items instead
-// dissolve by mixing their color toward the backdrop while staying opaque,
-// so a stack fades as one solid shape tinted into the background — no
-// see-through between overlapping chips. The backdrop is sampled by height:
-// page background high up, felt color through the felt's own ramp, so the
-// chip fade band may overlap the felt ramp safely.
+// Every fragment shader includes FADE_GLSL (below), the single copy of the
+// fade ramps and backdrop sampling. The felt surface fades by alpha with an
+// eased ramp (it is the bottom layer); ring and panel fade alpha linearly;
+// chip, wall, and text dissolve by mixing their color toward the backdrop
+// while staying opaque, so a stack fades as one solid shape tinted into the
+// background, with no see-through between overlapping chips. The backdrop is
+// sampled by height: page background high up, felt color through the felt's
+// own ramp, so the chip fade band may overlap the felt ramp safely.
+
+// Shared fade/backdrop GLSL, concatenated into every fragment shader. Bands
+// and colors arrive as uniforms set from Frame by the renderer; y is
+// canvas-space (vWorldY).
+export const FADE_GLSL = `
+uniform vec2 uSceneFade;
+uniform vec2 uFeltFade;
+uniform vec3 uCanvasColor;
+uniform vec3 uFeltColor;
+float fadeLinear(float y, vec2 band) {
+  return clamp((y - band.x) / max(band.y - band.x, 0.001), 0.0, 1.0);
+}
+float fadeRamp(float y, vec2 band) {
+  float t = fadeLinear(y, band);
+  return t * t * (3.0 - 2.0 * t);
+}
+vec3 backdropAt(float y) {
+  return mix(uCanvasColor, uFeltColor, fadeRamp(y, uFeltFade));
+}
+`;
 
 // --- chip face ---------------------------------------------------------------
 
@@ -70,10 +91,8 @@ in float vAngle;
 in float vWorldY;
 out vec4 frag;
 
-uniform vec2 uFade;
-uniform vec2 uFeltFade;
-uniform vec3 uCanvasColor;
-uniform vec3 uFeltColor;
+${FADE_GLSL}
+
 uniform float uChipRadius;
 uniform float uSquash;
 uniform float uSpotHalfWidth;
@@ -126,11 +145,7 @@ void main() {
 
   // Dissolve into the backdrop, sampled by height: page background high up,
   // felt color where the felt's own ramp is still visible. Opaque throughout.
-  float feltT = clamp((vWorldY - uFeltFade.x) / max(uFeltFade.y - uFeltFade.x, 0.001), 0.0, 1.0);
-  feltT = feltT * feltT * (3.0 - 2.0 * feltT);
-  vec3 backdrop = mix(uCanvasColor, uFeltColor, feltT);
-  float fade = clamp((vWorldY - uFade.x) / max(uFade.y - uFade.x, 0.001), 0.0, 1.0);
-  rgb = mix(backdrop, rgb, fade);
+  rgb = mix(backdropAt(vWorldY), rgb, fadeLinear(vWorldY, uSceneFade));
   float alpha = max(body, max(rimA, max(arcA, hiA)));
   frag = vec4(rgb * alpha, alpha);
 }`;
@@ -180,10 +195,8 @@ in float vAngle;
 in float vWorldY;
 out vec4 frag;
 
-uniform vec2 uFade;
-uniform vec2 uFeltFade;
-uniform vec3 uCanvasColor;
-uniform vec3 uFeltColor;
+${FADE_GLSL}
+
 uniform float uChipRadius;
 uniform float uSquash;
 uniform float uSpotHalfWidth;
@@ -226,11 +239,7 @@ void main() {
   float groove = (1.0 - smoothstep(-aa, aa, abs(dBot) - 0.5)) * smoothstep(-aa, aa, q.y - T);
   base = mix(base, vec3(0.0), groove * 0.38);
 
-  float feltT = clamp((vWorldY - uFeltFade.x) / max(uFeltFade.y - uFeltFade.x, 0.001), 0.0, 1.0);
-  feltT = feltT * feltT * (3.0 - 2.0 * feltT);
-  vec3 backdrop = mix(uCanvasColor, uFeltColor, feltT);
-  float fade = clamp((vWorldY - uFade.x) / max(uFade.y - uFade.x, 0.001), 0.0, 1.0);
-  base = mix(backdrop, base, fade);
+  base = mix(backdropAt(vWorldY), base, fadeLinear(vWorldY, uSceneFade));
   frag = vec4(base * wall, wall);
 }`;
 
@@ -283,7 +292,7 @@ in vec4 vFill;
 in float vWorldY;
 out vec4 frag;
 
-uniform vec2 uFade;
+${FADE_GLSL}
 
 void main() {
   vec2 p = vLocal;
@@ -301,7 +310,7 @@ void main() {
   // soft > 0 fades the fill edge over that many px (contact shadows).
   float fillA = 1.0 - smoothstep(-aa, vSoft + aa, d);
 
-  float fade = clamp((vWorldY - uFade.x) / max(uFade.y - uFade.x, 0.001), 0.0, 1.0);
+  float fade = fadeLinear(vWorldY, uSceneFade);
   vec4 s = vec4(vStroke.rgb * vStroke.a * strokeA, vStroke.a * strokeA) * fade;
   vec4 f = vec4(vFill.rgb * vFill.a * fillA, vFill.a * fillA) * fade;
   frag = s + f * (1.0 - s.a);
@@ -348,7 +357,7 @@ in vec4 vStroke;
 in float vWorldY;
 out vec4 frag;
 
-uniform vec2 uFade;
+${FADE_GLSL}
 
 void main() {
   vec2 q = abs(vLocal) - vHalfSize + vRadius;
@@ -358,7 +367,7 @@ void main() {
   float fillA = 1.0 - smoothstep(-aa, aa, d);
   float strokeA = 1.0 - smoothstep(-aa, aa, abs(d) - 0.5);
 
-  float fade = clamp((vWorldY - uFade.x) / max(uFade.y - uFade.x, 0.001), 0.0, 1.0);
+  float fade = fadeLinear(vWorldY, uSceneFade);
   vec4 s = vec4(vStroke.rgb * vStroke.a * strokeA, vStroke.a * strokeA) * fade;
   vec4 f = vec4(vFill.rgb * vFill.a * fillA, vFill.a * fillA) * fade;
   frag = s + f * (1.0 - s.a);
@@ -393,18 +402,11 @@ in vec2 vUV;
 in vec3 vColor;
 in float vWorldY;
 uniform sampler2D uAtlas;
-uniform vec2 uFade;
-uniform vec2 uFeltFade;
-uniform vec3 uCanvasColor;
-uniform vec3 uFeltColor;
 out vec4 frag;
+${FADE_GLSL}
 void main() {
-  float feltT = clamp((vWorldY - uFeltFade.x) / max(uFeltFade.y - uFeltFade.x, 0.001), 0.0, 1.0);
-  feltT = feltT * feltT * (3.0 - 2.0 * feltT);
-  vec3 backdrop = mix(uCanvasColor, uFeltColor, feltT);
-  float fade = clamp((vWorldY - uFade.x) / max(uFade.y - uFade.x, 0.001), 0.0, 1.0);
   float a = texture(uAtlas, vUV).a;
-  frag = vec4(mix(backdrop, vColor, fade) * a, a);
+  frag = vec4(mix(backdropAt(vWorldY), vColor, fadeLinear(vWorldY, uSceneFade)) * a, a);
 }`;
 
 // --- felt surface ----------------------------------------------------------------
@@ -453,7 +455,7 @@ in vec3 vFeltDeep;
 in float vWorldY;
 out vec4 frag;
 
-uniform vec2 uFade;
+${FADE_GLSL}
 
 void main() {
   vec2 q = abs(vLocal) - vHalfSize + vRadius;
@@ -475,7 +477,6 @@ void main() {
   rgb *= 1.0 - 0.22 * (1.0 - smoothstep(0.0, 70.0, -d));
 
   // Ease both ends of the ramp so the felt's emergence is gradual.
-  float fade = clamp((vWorldY - uFade.x) / max(uFade.y - uFade.x, 0.001), 0.0, 1.0);
-  float alpha = shape * (fade * fade * (3.0 - 2.0 * fade));
+  float alpha = shape * fadeRamp(vWorldY, uFeltFade);
   frag = vec4(rgb * alpha, alpha);
 }`;

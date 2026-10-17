@@ -38,6 +38,8 @@ export type PassSpec = {
   stride: number;
   /** Pack one item into `out` at float offset `o`, returning the next offset. */
   pack: (item: SceneItem, out: Float32Array, o: number) => number;
+  /** True when the pass samples the glyph atlas on texture unit 0. */
+  atlas?: boolean;
 };
 
 // Quad half-extents carry an AA margin beyond the outermost SDF feature.
@@ -236,5 +238,5 @@ export const PASS_SPECS: Record<Kind, PassSpec> = {
   chip: { vs: CHIP_VS, fs: CHIP_FS, attrs: CHIP_ATTRS, stride: CHIP_STRIDE, pack: packChip },
   wall: { vs: WALL_VS, fs: WALL_FS, attrs: WALL_ATTRS, stride: WALL_STRIDE, pack: packWall },
   panel: { vs: PANEL_VS, fs: PANEL_FS, attrs: PANEL_ATTRS, stride: PANEL_STRIDE, pack: packPanel },
-  glyph: { vs: TEXT_VS, fs: TEXT_FS, attrs: TEXT_ATTRS, stride: TEXT_STRIDE, pack: packGlyph },
+  glyph: { vs: TEXT_VS, fs: TEXT_FS, attrs: TEXT_ATTRS, stride: TEXT_STRIDE, pack: packGlyph, atlas: true },
 };
