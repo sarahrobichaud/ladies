@@ -2,12 +2,13 @@
 // consecutive same-kind runs as instanced draws, one pass per kind.
 
 import type { Size } from "../geom";
+import type { FontFace } from "../scene/font";
+import type { RGB, SceneItem } from "../scene/primitives";
 import type { Stage } from "../stage";
 import { CHIP_RADIUS, CHIP_SQUASH, INNER_DASH, INNER_RING_RADIUS, SPOT_HALF_WIDTH, SPOT_INNER_RADIUS } from "../world";
+import { GlyphAtlas } from "./atlas";
 import { Batch, createGL, createProgram } from "./gl";
 import { type Kind, PASS_SPECS, type PassSpec } from "./passes";
-import type { RGB, SceneItem } from "./primitives";
-import { type FontFace, GlyphAtlas } from "./text";
 
 /** One compiled pass: its spec, program, instance batch, and cached uniform location. */
 type Pass = {

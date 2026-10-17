@@ -10,13 +10,9 @@ import { allSlots, slotPosition } from "../lattice";
 import { CHIP_RADIUS, CHIP_SQUASH, STACK_LIFT } from "../world";
 import type { Zone } from "../zones";
 import type { SceneColors } from "./colors";
+import type { FontFace } from "./font";
 import { chipAngle, engraved, pushLabel, rgba, ring, shade, shadow, spot } from "./items";
 import type { SceneItem } from "./primitives";
-import type { FontFace } from "./text";
-
-export type { Drag, Lift } from "../interaction";
-export type { SceneColors } from "./colors";
-
 /** Fonts the scene renders with. */
 export type SceneFonts = { chip: FontFace; badge: FontFace };
 

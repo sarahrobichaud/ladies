@@ -1,6 +1,6 @@
 import { CHIP_RADIUS, CHIP_SQUASH } from "../world";
+import type { FontFace } from "./font";
 import type { RGB, RGBA, RingItem, SceneItem } from "./primitives";
-import type { FontFace } from "./text";
 
 // Constructors for scene draw items — the vocabulary helpers buildScene composes.
 

@@ -3,9 +3,9 @@
 // primitive means adding one spec here; stride is derived from the
 // attributes, so the old four-table sync hazard is gone.
 
+import type { ChipItem, FeltItem, GlyphItem, PanelItem, RingItem, SceneItem, WallItem } from "../scene/primitives";
 import { CHIP_RADIUS, CHIP_SQUASH } from "../world";
 import type { InstanceAttr } from "./gl";
-import type { ChipItem, FeltItem, GlyphItem, PanelItem, RingItem, SceneItem, WallItem } from "./primitives";
 import {
   CHIP_FS,
   CHIP_VS,

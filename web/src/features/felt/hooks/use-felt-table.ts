@@ -6,7 +6,7 @@ import type { Felt } from "../felt";
 import { setFelt as resizeFelt } from "../felt";
 import type { Size } from "../geom";
 import { createPrimitiveRenderer, type PrimitiveRenderer } from "../renderer/renderer";
-import { buildScene } from "../renderer/scene";
+import { buildScene } from "../scene/build";
 import { feltSize, stage, washRect } from "../stage";
 import { type FeltStore, useFeltState } from "../store";
 import type { ZoneSpec } from "../zones";

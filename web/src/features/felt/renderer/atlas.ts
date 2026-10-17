@@ -5,7 +5,8 @@
 // rasterized at `scale`× (devicePixelRatio) for sharpness. Only the alpha
 // channel is sampled, so glyphs are drawn white.
 
-import type { GlyphItem, RGB } from "./primitives";
+import type { FontFace } from "../scene/font";
+import type { GlyphItem } from "../scene/primitives";
 
 export type Glyph = {
   u0: number;
@@ -18,12 +19,6 @@ export type Glyph = {
   h: number;
   advance: number;
 };
-
-export interface FontFace {
-  width(text: string): number;
-  // Quads for `text` anchored at (x, y) = left edge, middle baseline.
-  glyphs(text: string, x: number, y: number, color: RGB): GlyphItem[];
-}
 
 const ATLAS_SIZE = 256;
 

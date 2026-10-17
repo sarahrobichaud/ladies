@@ -1,6 +1,6 @@
 import type { RefObject } from "react";
 import { useEffect, useRef } from "react";
-import { resolveSceneColors, type SceneColors } from "../renderer/colors";
+import { resolveSceneColors, type SceneColors } from "../scene/colors";
 
 /**
  * Keeps the theme-resolved scene colors in a ref, re-resolving on theme
