@@ -6,7 +6,7 @@ import { parseRuns } from "../features/chips/notation";
 import { coalesce } from "../features/chips/runs";
 import type { Catalog, Run } from "../features/chips/types";
 import { ChipTray } from "../features/felt/components/chip-tray";
-import { FELT_ORIGIN, FeltCanvas } from "../features/felt/components/felt-canvas";
+import { FeltCanvas } from "../features/felt/components/felt-canvas";
 import {
   clearBoard,
   clearZone,
@@ -19,6 +19,7 @@ import { useFelt } from "../features/felt/hooks/use-felt";
 import { type FeltAction, useFeltGestures } from "../features/felt/hooks/use-felt-gestures";
 import { nearestFreeSlot } from "../features/felt/interaction";
 import { allSlots } from "../features/felt/lattice";
+import { stage } from "../features/felt/stage";
 import { FREE_LAYOUT, type ZoneSpec } from "../features/felt/zones";
 import { chipLabel, formatChips } from "../snapshot";
 
@@ -62,7 +63,7 @@ export function ChipLabPage() {
       apply((f) => clearZone(f, action.zoneId));
     }
   };
-  const gestures = useFeltGestures({ felt, apply, canvasRef, origin: FELT_ORIGIN, onAction });
+  const gestures = useFeltGestures({ felt, apply, canvasRef, stage, onAction });
   const [notation, setNotation] = useState("");
   const [notationError, setNotationError] = useState<string | null>(null);
 

@@ -1,11 +1,18 @@
-mport { useEffect, useMemo, useRef, useState } from "react";
-import type { CSSProperties, PointerEvent as ReactPointerEvent } from "react";
-import { Chip, CHIP_SIZE } from "../features/chips/chip";
+import {
+  type CSSProperties,
+  type PointerEvent as ReactPointerEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { CHIP_SIZE, Chip } from "../features/chips/chip";
 import type { Catalog } from "../features/chips/types";
-import { FELT_ORIGIN, FeltCanvas } from "../features/felt/components/felt-canvas";
+import { FeltCanvas } from "../features/felt/components/felt-canvas";
 import { clearZone, zoneStackValue } from "../features/felt/felt";
 import { useFelt } from "../features/felt/hooks/use-felt";
 import { useFeltGestures } from "../features/felt/hooks/use-felt-gestures";
+import { stage } from "../features/felt/stage";
 import type { ZoneSpec } from "../features/felt/zones";
 import type { HandSnapshot, PlayerSnapshot } from "../snapshot";
 import { formatChips } from "../snapshot";
@@ -107,7 +114,7 @@ export function ActionDeck({
   const catalog = useMemo(() => blindsCatalog({ small, big }), [small, big]);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const { felt, apply } = useFelt(catalog, TABLE_LAYOUT);
-  const gestures = useFeltGestures({ felt, apply, canvasRef, origin: FELT_ORIGIN });
+  const gestures = useFeltGestures({ felt, apply, canvasRef, stage });
 
   const staged = zoneStackValue(felt, BET_ZONE_ID);
   const plan = commitPlan(staged, player, facingBet, callAmount, hand.min_raise);

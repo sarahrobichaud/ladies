@@ -3,59 +3,20 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { useCanvasRenderLoop } from "../../../hooks/use-canvas-render-loop";
 import { useLatestRef } from "../../../hooks/use-latest-ref";
 import { CHIP_SIZE } from "../../chips/chip";
-import type { Point, Size } from "../geom";
-import { STACK_HEIGHT_CAP, type Felt, setFelt as resizeFelt } from "../felt";
+import { type Felt, setFelt as resizeFelt } from "../felt";
+import type { Size } from "../geom";
 import type { FeltGestures } from "../hooks/use-felt-gestures";
 import { useSceneColors } from "../hooks/use-scene-colors";
 import { createPrimitiveRenderer, type PrimitiveRenderer } from "../renderer/renderer";
 import { buildScene } from "../renderer/scene";
-import { CHIP_RADIUS, CHIP_SQUASH, SLOT_ROW_HEIGHT, STACK_LIFT } from "../world";
-
-/**
- * Canvas px where a capped top-row stack's top chip lands. The top inset is
- * derived from it, so the whole felt scale follows CHIP_SIZE from one knob.
- */
-const STACK_TOP_Y = 16;
-
-/**
- * Canvas-to-felt insets in CSS px: the offset of the placeable felt surface
- * within the canvas viewport, derived from the world scale. The top inset is
- * stack headroom — a STACK_HEIGHT_CAP stack on the top row tops out at
- * STACK_TOP_Y — and the top region doubles as the fade zone: the felt
- * surface and the chips fade in GL with their own zones (the felt dissolves
- * first), so stacks rise off the felt without a hard cut.
- */
-const FELT_INSET = {
-  top: Math.round(
-    (STACK_HEIGHT_CAP - 1) * STACK_LIFT + CHIP_RADIUS * CHIP_SQUASH + STACK_TOP_Y - SLOT_ROW_HEIGHT,
-  ),
-  x: Math.round(CHIP_RADIUS * 0.72),
-  bottom: Math.round(CHIP_RADIUS * 0.72),
-};
-
-/** Canvas px of the top lattice row; the fade bands live in the headroom
- *  above it, so stacks resting in the top slots stay fully solid. */
-const TOP_ROW_Y = SLOT_ROW_HEIGHT + FELT_INSET.top;
-
-/** Fade zones in canvas px as [startY, endY], both confined to the upper
- *  headroom: stacks stay fully solid until they cross the threshold (45% of
- *  the headroom above the top slots), then dissolve aggressively over a
- *  short ramp. Faded chips sample the backdrop by height (page background
- *  high up, felt color through the felt's own ramp), so the overlapping
- *  bands stay coherent — a fully faded chip always matches what is behind it. */
-const SCENE_FADE: readonly [number, number] = [Math.round(TOP_ROW_Y * 0.15), Math.round(TOP_ROW_Y * 0.45)];
-const FELT_FADE: readonly [number, number] = [Math.round(TOP_ROW_Y * 0.1), Math.round(TOP_ROW_Y * 0.85)];
-
-/** The felt surface's top-left corner within the canvas, in CSS px.
- *  Shared with useFeltGestures so pointer mapping matches the rendered felt. */
-export const FELT_ORIGIN: Point = { x: FELT_INSET.x, y: FELT_INSET.top };
+import { feltSize, stage, washRect } from "../stage";
 
 /** Where the felt surface, and overlays anchored to it, sit in the container. */
 const FELT_RECT_STYLE: CSSProperties = {
-  top: FELT_INSET.top,
-  right: FELT_INSET.x,
-  bottom: FELT_INSET.bottom,
-  left: FELT_INSET.x,
+  top: stage.inset.top,
+  right: stage.inset.x,
+  bottom: stage.inset.bottom,
+  left: stage.inset.x,
 };
 
 type FeltCanvasProps = {
@@ -130,12 +91,7 @@ export function FeltCanvas({ felt, apply, canvasRef, gestures, className, emptyL
   useCanvasRenderLoop(canvasRef, {
     onResize: (size) => {
       viewportRef.current = size;
-      apply((f) =>
-        resizeFelt(f, {
-          w: Math.max(0, size.w - FELT_INSET.x * 2),
-          h: Math.max(0, size.h - FELT_INSET.top - FELT_INSET.bottom),
-        }),
-      );
+      apply((f) => resizeFelt(f, feltSize(stage, size)));
     },
     draw: (time, dpr) => {
       const renderer = rendererRef.current;
@@ -171,7 +127,7 @@ export function FeltCanvas({ felt, apply, canvasRef, gestures, className, emptyL
     emptyFramesRef.current = 0;
     const items = buildScene({
       felt: scene.felt,
-      surface: { x: -FELT_ORIGIN.x, y: -FELT_ORIGIN.y, w: viewport.w, h: viewport.h },
+      surface: washRect(stage, viewport),
       handPos: scene.handPos,
       drag: scene.drag,
       hover: scene.hover,
@@ -181,9 +137,9 @@ export function FeltCanvas({ felt, apply, canvasRef, gestures, className, emptyL
       fonts,
     });
     renderer.render(items, viewport.w, viewport.h, {
-      origin: FELT_ORIGIN,
-      feltFade: FELT_FADE,
-      sceneFade: SCENE_FADE,
+      origin: stage.origin,
+      feltFade: stage.feltFade,
+      sceneFade: stage.sceneFade,
       canvasColor: colors.canvasBg,
       feltColor: colors.felt,
     });

@@ -28,6 +28,7 @@ import {
   pickAt,
 } from "../interaction";
 import { type Slot, slotPosition } from "../lattice";
+import { feltPoint, type Stage } from "../stage";
 import { CHIP_RADIUS, CHIP_SQUASH, STACK_LIFT } from "../world";
 import { resolveZones, zoneById } from "../zones";
 
@@ -68,25 +69,25 @@ type Options = {
   /** Stable dispatcher for the pure felt ops (from useFelt). */
   apply: (op: (felt: Felt) => Felt) => void;
   canvasRef: RefObject<HTMLCanvasElement | null>;
-  /** Felt surface's top-left offset within the canvas, in CSS px. */
-  origin?: Point;
+  /** Canvas layout authority; supplies the felt origin for pointer mapping. */
+  stage: Stage;
   onAction?: (action: FeltAction) => void;
 };
 
 /**
  * The felt's pointer state machine, translating raw pointer gestures into
  * felt model ops and semantic FeltActions.
- * @param options - felt state, op dispatcher, canvas ref, felt origin, and action sink
+ * @param options - felt state, op dispatcher, canvas ref, canvas layout, and action sink
  * @returns gesture state, handler bundles, the lift animation stepper, and reset
  */
-export function useFeltGestures({ felt, apply, canvasRef, origin, onAction }: Options) {
+export function useFeltGestures({ felt, apply, canvasRef, stage, onAction }: Options) {
   const [handPos, setHandPos] = useState<Point | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
   const [spawn, setSpawn] = useState<Spawn | null>(null);
   const [hover, setHover] = useState<Pick | null>(null);
 
   const feltRef = useLatestRef(felt);
-  const originRef = useLatestRef(origin ?? { x: 0, y: 0 });
+  const stageRef = useLatestRef(stage);
   const handPosRef = useLatestRef(handPos);
   const dragRef = useLatestRef(drag);
   const spawnRef = useLatestRef(spawn);
@@ -113,8 +114,7 @@ export function useFeltGestures({ felt, apply, canvasRef, origin, onAction }: Op
     if (!rect) {
       return null;
     }
-    const o = originRef.current;
-    return { x: clientX - rect.left - o.x, y: clientY - rect.top - o.y };
+    return feltPoint(stageRef.current, { x: clientX - rect.left, y: clientY - rect.top });
   };
 
   // A native listener so wheel can preventDefault; capacity rules live in
