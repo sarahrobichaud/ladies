@@ -7,7 +7,7 @@ import { type Felt, feltZones, type Stack, stackSize } from "../felt";
 import type { Point } from "../geom";
 import { type Drag, type Landing, type Lift, landingFor, type Pick, stackTopOffset } from "../interaction";
 import { allSlots, slotPosition } from "../lattice";
-import { CHIP_RADIUS, CHIP_SQUASH, STACK_LIFT } from "../world";
+import { CHIP_RADIUS, CHIP_SQUASH, rpx, STACK_LIFT } from "../world";
 import type { Zone } from "../zones";
 import type { SceneColors } from "./colors";
 import type { FontFace } from "./font";
@@ -76,8 +76,8 @@ export function buildScene(input: SceneInput): SceneItem[] {
   return items;
 }
 
-// Felt surface corner radius, matching the rounded-xl chrome.
-const feltSurface = { radius: 12 } as const;
+// Felt surface corner radius, matching the rounded-xl chrome (≈ 0.34 R).
+const feltSurface = { radius: rpx(0.34) } as const;
 
 /** Draw the felt surface: the gradient wash every other item sits on. */
 function pushFeltSurface(items: SceneItem[], surface: SceneInput["surface"], colors: SceneColors) {
@@ -94,7 +94,7 @@ function pushFeltSurface(items: SceneItem[], surface: SceneInput["surface"], col
 }
 
 // Lattice rings: faint dashed chip outlines.
-const latticeRing = { inset: 1, width: 1, dash: [3, 5], alpha: 0.16 } as const;
+const latticeRing = { inset: rpx(0.03), width: rpx(0.03), dash: [rpx(0.09), rpx(0.14)], alpha: 0.16 } as const;
 
 /** Draw one dashed ring per standard chip slot; marked zones render their own markers instead. */
 function pushLattice(items: SceneItem[], felt: Felt, zones: Zone[], colors: SceneColors) {
@@ -128,7 +128,7 @@ function pushLattice(items: SceneItem[], felt: Felt, zones: Zone[], colors: Scen
 }
 
 // Bet slots darken like pressed-in spots in the felt.
-const betSpot = { inset: 2, alpha: 0.14, soft: 2 } as const;
+const betSpot = { inset: rpx(0.06), alpha: 0.14, soft: rpx(0.06) } as const;
 
 /** Draw bet-zone slots as darkened spots pressed into the felt. */
 function pushZoneMarks(items: SceneItem[], zones: Zone[]) {
@@ -144,7 +144,13 @@ function pushZoneMarks(items: SceneItem[], zones: Zone[]) {
 }
 
 // Buttons: engraved spots rimmed and labeled so they read pressable.
-const button = { inset: 2, rimAlpha: 0.3, fillAlpha: 0.16, soft: 2, labelOffset: 0.5 } as const;
+const button = {
+  inset: rpx(0.06),
+  rimAlpha: 0.3,
+  fillAlpha: 0.16,
+  soft: rpx(0.06),
+  labelOffset: CHIP_RADIUS * 0.014,
+} as const;
 
 /** Draw one engraved, rimmed spot per button-zone slot, labeled and squashed like the lattice. */
 function pushButtons(items: SceneItem[], zones: Zone[], colors: SceneColors, fonts: SceneFonts) {
@@ -163,7 +169,7 @@ function pushButtons(items: SceneItem[], zones: Zone[], colors: SceneColors, fon
 }
 
 // Dashed ghost rings: the landing preview and the cut-plane ring share one look.
-const ghostRing = { width: 2, dash: [4, 4], placeAlpha: 0.6, combineTintAlpha: 0.2 } as const;
+const ghostRing = { width: rpx(0.06), dash: [rpx(0.11), rpx(0.11)], placeAlpha: 0.6, combineTintAlpha: 0.2 } as const;
 
 /** Draw the landing ghost where the hand's bottom chip would sit. */
 function pushLandingGhost(items: SceneItem[], landing: Landing | null, colors: SceneColors) {
@@ -187,7 +193,7 @@ function pushLandingGhost(items: SceneItem[], landing: Landing | null, colors: S
 }
 
 // Merge halo: a solid ring pulsing around the combine target.
-const halo = { periodMs: 180, gap: 6, wobble: 1.5, alphaMin: 0.45, alphaRange: 0.55 } as const;
+const halo = { periodMs: 180, gap: rpx(0.17), wobble: CHIP_RADIUS * 0.043, alphaMin: 0.45, alphaRange: 0.55 } as const;
 
 /** Draw the pulsing halo around the stack the hand will combine with. */
 function pushMergeHalo(items: SceneItem[], target: Stack, colors: SceneColors, time: number) {
@@ -216,7 +222,7 @@ function stacksBackToFront(felt: Felt): Stack[] {
 }
 
 // Contact shadow under a stack resting on the felt.
-const stackShadow = { drop: 1.5, spread: 2.5, alpha: 0.25, soft: 4 } as const;
+const stackShadow = { drop: CHIP_RADIUS * 0.043, spread: CHIP_RADIUS * 0.0714, alpha: 0.25, soft: rpx(0.11) } as const;
 
 /** Draw one contact shadow per stack, hoisted ahead of all stack ink. */
 function pushStackShadows(items: SceneItem[], stacks: Stack[]) {
@@ -227,7 +233,7 @@ function pushStackShadows(items: SceneItem[], stacks: Stack[]) {
 }
 
 // Chip ink: non-merge-target stacks dim while dragging; labels sit just below chip centers.
-const chipInk = { dim: 0.5, labelBaselineOffset: 0.5 } as const;
+const chipInk = { dim: 0.5, labelBaselineOffset: CHIP_RADIUS * 0.014 } as const;
 
 /** Draw one stack: walls in one run, then the exposed faces with labels. */
 function pushStack(items: SceneItem[], felt: Felt, stack: Stack, mergeTarget: Stack | null, ctx: StackContext) {
@@ -328,7 +334,7 @@ function kindsAt(stack: Stack): number[] {
 }
 
 // Contact shadow under the hand, held above the felt: softer, wider, offset further down.
-const handShadow = { drop: 5, spread: 4, alpha: 0.18, soft: 7 } as const;
+const handShadow = { drop: rpx(0.14), spread: rpx(0.11), alpha: 0.18, soft: rpx(0.2) } as const;
 
 /** Draw the held hand: a soft shadow plus a wall, face, and label per chip. */
 function pushHand(items: SceneItem[], felt: Felt, handPos: Point | null, colors: SceneColors, fonts: SceneFonts) {
@@ -384,7 +390,14 @@ function pushHand(items: SceneItem[], felt: Felt, handPos: Point | null, colors:
 }
 
 // Hover badge: a rounded panel floating above the hovered stack's top chip.
-const badge = { lift: 14, clearance: 10, padX: 8, halfHeight: 9, radius: 9, fillAlpha: 0.9 } as const;
+const badge = {
+  lift: rpx(0.4),
+  clearance: rpx(0.29),
+  padX: rpx(0.23),
+  halfHeight: rpx(0.26),
+  radius: rpx(0.26),
+  fillAlpha: 0.9,
+} as const;
 
 /** Draw the hovered stack's value badge above its top chip. */
 function pushHoverBadge(

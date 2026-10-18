@@ -29,13 +29,13 @@ import {
 import { type Slot, slotPosition } from "../lattice";
 import { feltPoint, type Stage } from "../stage";
 import type { FeltStore } from "../store";
-import { CHIP_RADIUS, CHIP_SQUASH, STACK_LIFT } from "../world";
+import { CHIP_RADIUS, CHIP_SQUASH, rpx, STACK_LIFT } from "../world";
 import { resolveZones, zoneById } from "../zones";
 
 /** Pointer semantics against the resting felt, as a plain controller. */
 
-/** Pointer travel before a tray press becomes a drag, in px. */
-const SPAWN_THRESHOLD = 6;
+/** Pointer travel before a tray press becomes a drag, as a fraction of the chip radius. */
+const SPAWN_THRESHOLD = rpx(0.17);
 
 /** A tray press in progress: which kind, which pointer, where it started. */
 type Spawn = { kind: KindId; pointerId: number; startX: number; startY: number };
@@ -423,7 +423,7 @@ export function createFeltGestures({ store, stage, canvasRef }: FeltGesturesOpti
         lift.value += (PREVIEW_LIFT - lift.value) * 0.25;
       } else if (lift) {
         lift.value *= 0.7;
-        if (lift.value < 0.5) {
+        if (lift.value < PREVIEW_LIFT * 0.05) {
           lift = null;
         }
       }

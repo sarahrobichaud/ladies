@@ -1,6 +1,5 @@
 import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
 import { useCanvasRenderLoop } from "../../../hooks/use-canvas-render-loop";
-import { CHIP_SIZE } from "../../chips/chip";
 import type { Catalog } from "../../chips/types";
 import type { Felt } from "../felt";
 import { setFelt as resizeFelt } from "../felt";
@@ -9,6 +8,7 @@ import { createPrimitiveRenderer, type PrimitiveRenderer } from "../renderer/ren
 import { buildScene } from "../scene/build";
 import { feltSize, stage, washRect } from "../stage";
 import { type FeltStore, useFeltState } from "../store";
+import { rpx } from "../world";
 import type { ZoneSpec } from "../zones";
 import { useFeltStore } from "./use-felt";
 import { type FeltGestures, useFeltGestures } from "./use-felt-gestures";
@@ -111,8 +111,8 @@ export function useFeltTable(options: { catalog: Catalog; layout?: readonly Zone
     const { handPos, drag, hover } = gestures.frame();
     const lift = gestures.stepLift();
     const fonts = {
-      chip: renderer.font(Math.round(CHIP_SIZE * 0.25), colors.bodyFont, "600", dpr),
-      badge: renderer.font(Math.round(CHIP_SIZE * 0.27), colors.bodyFont, "600", dpr),
+      chip: renderer.font(rpx(0.5), colors.bodyFont, "600", dpr),
+      badge: renderer.font(rpx(0.54), colors.bodyFont, "600", dpr),
     };
     const viewport = viewportRef.current;
     if (viewport.w <= 0 || viewport.h <= 0) {

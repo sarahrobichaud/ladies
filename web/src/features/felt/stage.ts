@@ -1,6 +1,6 @@
 import { STACK_HEIGHT_CAP } from "./felt";
 import type { Point, Size } from "./geom";
-import { CHIP_RADIUS, CHIP_SQUASH, SLOT_ROW_HEIGHT, STACK_LIFT } from "./world";
+import { CHIP_RADIUS, CHIP_SQUASH, rpx, SLOT_ROW_HEIGHT, STACK_LIFT } from "./world";
 
 /**
  * The felt's canvas layout: the single authority for the inset/fade contract
@@ -32,9 +32,10 @@ export type Stage = {
  * @returns a stage with every cross-layer layout constant resolved in one place
  */
 export function createStage(): Stage {
-  // Canvas px where a capped top-row stack's top chip lands. The top inset is
-  // derived from it, so the whole felt scale follows CHIP_SIZE from one knob.
-  const STACK_TOP_Y = 16;
+  // Headroom above a capped top-row stack's top chip, as a fraction of the
+  // chip radius. The top inset derives from it, so the whole felt scale
+  // follows the world's chip diameter from one knob.
+  const STACK_TOP_Y = rpx(0.46);
 
   // Canvas-to-felt insets in CSS px: the offset of the placeable felt surface
   // within the canvas viewport. The top inset is stack headroom (a

@@ -1,19 +1,19 @@
 import { type Felt, STACK_HEIGHT_CAP, type Stack, type StackId, stackSize } from "./felt";
 import type { Point } from "./geom";
 import { allSlots, type Slot, slotPosition } from "./lattice";
-import { BUTTON_HALF_HEIGHT, BUTTON_HALF_WIDTH, CHIP_RADIUS, CHIP_SQUASH, STACK_LIFT } from "./world";
+import { BUTTON_HALF_HEIGHT, BUTTON_HALF_WIDTH, CHIP_RADIUS, CHIP_SQUASH, rpx, STACK_LIFT } from "./world";
 import { isPlaceable, resolveZones, type Zone, zoneAt } from "./zones";
 
 /** Pointer semantics against the resting felt, as pure geometry. */
 
-/** Hover preview lift for the upper half, in px. */
-export const PREVIEW_LIFT = 10;
+/** Hover preview lift for the upper half, as a fraction of the chip radius. */
+export const PREVIEW_LIFT = rpx(0.29);
 
-/** Combine band height above a stack's top chip, in px. */
-export const COMBINE_BAND = 16;
+/** Combine band height above a stack's top chip, as a fraction of the chip radius. */
+export const COMBINE_BAND = rpx(0.46);
 
-/** Combine band horizontal half-tolerance, in px. */
-export const COMBINE_HALF_WIDTH = 20;
+/** Combine band horizontal half-tolerance, as a fraction of the chip radius. */
+export const COMBINE_HALF_WIDTH = rpx(0.57);
 
 /**
  * Top chip's offset above the stack's base, in px.
