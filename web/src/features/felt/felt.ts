@@ -62,7 +62,7 @@ export function createBoard(catalog: Catalog, felt: Size, layout: readonly ZoneS
  * @param felt - The felt whose layout and size to resolve.
  */
 export function feltZones(felt: Felt): Zone[] {
-  return resolveZones(felt.layout, felt.felt);
+  return resolveZones(felt.layout);
 }
 
 /**

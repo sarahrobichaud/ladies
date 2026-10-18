@@ -1,4 +1,3 @@
-import type { Size } from "./geom";
 import { allSlots, gridExtents, type Slot } from "./lattice";
 
 /**
@@ -48,14 +47,13 @@ export function isPlaceable(purpose: ZonePurpose): boolean {
 }
 
 /**
- * Resolves each spec against the felt size, in order.
+ * Resolves each spec against the fixed slot map, in order.
  * @param specs - the declarative layout to resolve
- * @param felt - the felt size in pixels
  */
-export function resolveZones(specs: readonly ZoneSpec[], felt: Size): Zone[] {
+export function resolveZones(specs: readonly ZoneSpec[]): Zone[] {
   return specs.map((spec) => ({
     ...spec,
-    slots: spec.slots === "all" ? allSlots(felt) : planarSlots(spec.slots, felt),
+    slots: spec.slots === "all" ? allSlots() : planarSlots(spec.slots),
   }));
 }
 
@@ -86,10 +84,9 @@ export function zoneById(zones: readonly Zone[], id: string): Zone | null {
 /**
  * Every slot of a rect spec in felt grid units.
  * @param rects - the cols/rows slot-index ranges
- * @param felt - the felt size in pixels
  */
-function planarSlots(rects: { cols: SlotRange; rows: SlotRange }, felt: Size): Slot[] {
-  const { cols, rows } = gridExtents(felt);
+function planarSlots(rects: { cols: SlotRange; rows: SlotRange }): Slot[] {
+  const { cols, rows } = gridExtents();
   const slots: Slot[] = [];
   for (let row = boundedFrom(rects.rows, rows); row <= boundedTo(rects.rows, rows); row++) {
     for (let col = boundedFrom(rects.cols, cols); col <= boundedTo(rects.cols, cols); col++) {

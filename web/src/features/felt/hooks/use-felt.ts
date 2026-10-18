@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useState } from "react";
 import type { Catalog } from "../../chips/types";
 import { createFeltStore, type FeltStore } from "../store";
 import { FREE_LAYOUT, type ZoneSpec } from "../zones";
@@ -11,9 +11,6 @@ import { FREE_LAYOUT, type ZoneSpec } from "../zones";
  * @returns the felt store to apply ops to and subscribe to
  */
 export function useFeltStore(catalog: Catalog, layout: readonly ZoneSpec[] = FREE_LAYOUT): FeltStore {
-  const ref = useRef<FeltStore | null>(null);
-  if (ref.current === null) {
-    ref.current = createFeltStore(catalog, layout);
-  }
-  return ref.current;
+  const [store] = useState(() => createFeltStore(catalog, layout));
+  return store;
 }

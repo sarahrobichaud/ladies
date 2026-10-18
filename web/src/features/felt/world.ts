@@ -1,3 +1,5 @@
+import type { Size } from "./geom";
+
 /** Chip face diameter in px — the single world-scale knob; the DOM chip derives its size from this. */
 export const CHIP_DIAMETER = 70;
 
@@ -38,6 +40,25 @@ export const SLOT_SPACING = CHIP_DIAMETER + SLOT_GAP;
 
 /** Row height of the staggered lattice: spacing × √3/2, snapped to the pixel grid. */
 export const SLOT_ROW_HEIGHT = Math.round(SLOT_SPACING * (Math.sqrt(3) / 2));
+
+// The slot map: dev-controlled lattice extents the felt always shows, sized
+// for three areas (player stack left, bet zone center front, cards right).
+
+/** Lattice columns of the fixed slot map. */
+export const MAP_COLS = 12;
+
+/** Lattice rows of the fixed slot map; the camera always shows all of them. */
+export const MAP_ROWS = 6;
+
+/**
+ * Felt surface size in world px that fits the fixed slot map; the half-slot
+ * margins land the enumeration on exactly MAP_ROWS rows and MAP_COLS columns
+ * per row (odd rows gain the staggered edge column).
+ */
+export const MAP_SIZE: Size = {
+  w: Math.round((MAP_COLS + 0.5) * SLOT_SPACING + CHIP_RADIUS),
+  h: Math.round((MAP_ROWS + 0.5) * SLOT_ROW_HEIGHT + CHIP_RADIUS),
+};
 
 /** Button slot half-width in px; buttons live on lattice slots but needn't be chip-shaped. */
 export const BUTTON_HALF_WIDTH = rpx(1.18);

@@ -1,15 +1,10 @@
 import type { CSSProperties, ReactNode } from "react";
+import { useSyncExternalStore } from "react";
+import { worldToView } from "../camera";
 import { useFeltCursor } from "../hooks/use-felt-gestures";
 import type { FeltTable } from "../hooks/use-felt-table";
 import { stage } from "../stage";
-
-/** Where the felt surface, and overlays anchored to it, sit in the container. */
-const FELT_RECT_STYLE: CSSProperties = {
-  top: stage.inset.top,
-  right: stage.inset.x,
-  bottom: stage.inset.bottom,
-  left: stage.inset.x,
-};
+import { MAP_SIZE } from "../world";
 
 type FeltCanvasProps = {
   /** The felt table owning the store, gestures, and render loop. */
@@ -23,14 +18,24 @@ type FeltCanvasProps = {
 
 /**
  * The felt canvas block: a presentational shell over a FeltTable. The canvas
- * is the full viewport; the felt surface is an inset region of it, rendered
- * in GL with a double-layer fade (the felt dissolves before the chips riding
- * on it do), so stacks rise off the felt without a hard cut.
+ * is the full viewport; the felt surface is the camera's view of the fixed
+ * map, rendered in GL with a double-layer fade (the felt dissolves before the
+ * chips riding on it do), so stacks rise off the felt without a hard cut.
  * @param props - the felt table plus chrome and overlays
  */
 export function FeltCanvas({ table, className, emptyLabel, children }: FeltCanvasProps) {
-  const { felt, gestures, canvasRef, glError } = table;
+  const { felt, gestures, canvasRef, camera, glError } = table;
   const cursor = useFeltCursor(gestures);
+  const cam = useSyncExternalStore(camera.subscribe, camera.get);
+
+  // The felt rect in screen px: the world-px map rect through the camera.
+  const feltOrigin = worldToView(cam, stage.origin);
+  const feltRectStyle: CSSProperties = {
+    top: feltOrigin.y,
+    left: feltOrigin.x,
+    width: MAP_SIZE.w * cam.scale,
+    height: MAP_SIZE.h * cam.scale,
+  };
 
   return (
     <div className={`relative${className ? ` ${className}` : ""}`}>
@@ -51,7 +56,7 @@ export function FeltCanvas({ table, className, emptyLabel, children }: FeltCanva
       {emptyLabel && felt.stacks.length === 0 && !felt.hand && (
         <p
           className="pointer-events-none absolute flex items-center justify-center text-sm text-on-felt/50"
-          style={FELT_RECT_STYLE}
+          style={feltRectStyle}
         >
           {emptyLabel}
         </p>

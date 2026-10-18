@@ -20,7 +20,6 @@ import { useFeltTable } from "../features/felt/hooks/use-felt-table";
 import { nearestFreeSlot } from "../features/felt/interaction";
 import { allSlots } from "../features/felt/lattice";
 import { FREE_LAYOUT, type ZoneSpec } from "../features/felt/zones";
-import { useZoomGuard } from "../hooks/use-zoom-guard";
 import { chipLabel, formatChips } from "../snapshot";
 
 // Poker layout: the whole lattice accepts stacks, with a staged bet zone near
@@ -53,7 +52,6 @@ function randomRuns(catalog: Catalog): Run[] {
 }
 
 export function ChipLabPage() {
-  const zoomGuard = useZoomGuard();
   const table = useFeltTable({ catalog: CATALOG, layout: POKER_LAYOUT });
   const { felt, store, gestures } = table;
   const [layoutName, setLayoutName] = useState<"free" | "poker">("poker");
@@ -80,7 +78,7 @@ export function ChipLabPage() {
   const stressTest = () => {
     store.apply((felt) => {
       let next = clearBoard(felt);
-      const slots = allSlots(next.felt);
+      const slots = allSlots();
       for (let i = slots.length - 1; i > 0; i--) {
         const j = Math.floor(Math.random() * (i + 1));
         [slots[i], slots[j]] = [slots[j], slots[i]];
@@ -111,7 +109,6 @@ export function ChipLabPage() {
 
   return (
     <div className="flex h-dvh flex-col gap-4 bg-canvas p-6">
-      {zoomGuard}
       <header className="flex items-center justify-between">
         <div>
           <h1 className="text-lg text-ink">Chip lab</h1>

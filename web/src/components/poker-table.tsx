@@ -1,5 +1,4 @@
 import type { CSSProperties } from "react";
-import { useZoomGuard } from "../hooks/use-zoom-guard";
 import type { CardDto, PlayerSnapshot } from "../snapshot";
 import { formatChips } from "../snapshot";
 import { PlayerCard, PlayingCard } from "./player-card";
@@ -44,11 +43,9 @@ export function PokerTable({
   pot: bigint;
 }) {
   const count = players.length;
-  const zoomGuard = useZoomGuard();
 
   return (
     <div className="relative mx-auto aspect-16/10 max-h-full w-full max-w-5xl">
-      {zoomGuard}
       {/* Wood rail + stitched felt. The rail's padding leaves a visible
           wood border around the felt; the felt fills the content box. */}
       <div className="wood-rail absolute inset-x-[6%] inset-y-[12%] rounded-[50%] p-[clamp(10px,1.8vw,26px)]">

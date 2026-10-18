@@ -52,7 +52,7 @@ export function buildScene(input: SceneInput): SceneItem[] {
   pushFeltSurface(items, input.surface, colors);
 
   const zones = feltZones(felt);
-  pushLattice(items, felt, zones, colors);
+  pushLattice(items, zones, colors);
   pushZoneMarks(items, zones);
   pushButtons(items, zones, colors, fonts);
 
@@ -97,7 +97,7 @@ function pushFeltSurface(items: SceneItem[], surface: SceneInput["surface"], col
 const latticeRing = { inset: rpx(0.03), width: rpx(0.03), dash: [rpx(0.09), rpx(0.14)], alpha: 0.16 } as const;
 
 /** Draw one dashed ring per standard chip slot; marked zones render their own markers instead. */
-function pushLattice(items: SceneItem[], felt: Felt, zones: Zone[], colors: SceneColors) {
+function pushLattice(items: SceneItem[], zones: Zone[], colors: SceneColors) {
   const blocked = new Set<string>();
   for (const zone of zones) {
     if (zone.purpose === "stack") {
@@ -107,7 +107,7 @@ function pushLattice(items: SceneItem[], felt: Felt, zones: Zone[], colors: Scen
       blocked.add(`${slot.col},${slot.row}`);
     }
   }
-  for (const slot of allSlots(felt.felt)) {
+  for (const slot of allSlots()) {
     if (blocked.has(`${slot.col},${slot.row}`)) {
       continue;
     }

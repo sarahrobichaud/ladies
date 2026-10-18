@@ -1,14 +1,14 @@
 import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
 import { useCanvasRenderLoop } from "../../../hooks/use-canvas-render-loop";
 import type { Catalog } from "../../chips/types";
+import { type CameraStore, createCameraStore, washRect } from "../camera";
 import type { Felt } from "../felt";
-import { setFelt as resizeFelt } from "../felt";
-import type { Size } from "../geom";
+import { setFelt } from "../felt";
 import { createPrimitiveRenderer, type PrimitiveRenderer } from "../renderer/renderer";
 import { buildScene } from "../scene/build";
-import { feltSize, stage, washRect } from "../stage";
+import { stage } from "../stage";
 import { type FeltStore, useFeltState } from "../store";
-import { rpx } from "../world";
+import { MAP_SIZE, rpx } from "../world";
 import type { ZoneSpec } from "../zones";
 import { useFeltStore } from "./use-felt";
 import { type FeltGestures, useFeltGestures } from "./use-felt-gestures";
@@ -24,6 +24,8 @@ export type FeltTable = {
   gestures: FeltGestures;
   /** Ref for the canvas element; render into it via FeltCanvas. */
   canvasRef: RefObject<HTMLCanvasElement | null>;
+  /** Live camera store; frame code reads `get()`, React components subscribe. */
+  camera: CameraStore;
   /** First GL failure (init or draw) as display text; null while healthy. */
   glError: string | null;
 };
@@ -38,11 +40,11 @@ export function useFeltTable(options: { catalog: Catalog; layout?: readonly Zone
   const store = useFeltStore(options.catalog, options.layout);
   const felt = useFeltState(store);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const gestures = useFeltGestures({ store, canvasRef, stage });
+  const camera = useCameraStore();
+  const gestures = useFeltGestures({ store, canvasRef, stage, camera });
 
   const rendererRef = useRef<PrimitiveRenderer | null>(null);
   const colorsRef = useSceneColors();
-  const viewportRef = useRef<Size>({ w: 0, h: 0 });
   // First GL failure (init or draw), surfaced in the DOM until reloaded.
   const [glError, setGlError] = useState<string | null>(null);
   const reportedRef = useRef(false);
@@ -87,9 +89,10 @@ export function useFeltTable(options: { catalog: Catalog; layout?: readonly Zone
   }, [gestures]);
 
   useCanvasRenderLoop(canvasRef, {
-    onResize: (size) => {
-      viewportRef.current = size;
-      store.apply((f) => resizeFelt(f, feltSize(stage, size)));
+    onResize: (size, dpr) => {
+      camera.resize(size, dpr);
+      // The felt is the fixed slot map; resizing only re-derives the camera.
+      store.apply((f) => setFelt(f, MAP_SIZE));
     },
     draw: (time, dpr) => {
       const renderer = rendererRef.current;
@@ -110,22 +113,23 @@ export function useFeltTable(options: { catalog: Catalog; layout?: readonly Zone
     const colors = colorsRef.current;
     const { handPos, drag, hover } = gestures.frame();
     const lift = gestures.stepLift();
+    const cam = camera.get();
     const fonts = {
-      chip: renderer.font(rpx(0.5), colors.bodyFont, "600", dpr),
-      badge: renderer.font(rpx(0.54), colors.bodyFont, "600", dpr),
+      chip: renderer.font(rpx(0.5), colors.bodyFont, "600", dpr * cam.scale),
+      badge: renderer.font(rpx(0.54), colors.bodyFont, "600", dpr * cam.scale),
     };
-    const viewport = viewportRef.current;
-    if (viewport.w <= 0 || viewport.h <= 0) {
+    const view = cam.view;
+    if (view.w <= 0 || view.h <= 0) {
       emptyFramesRef.current += 1;
       if (emptyFramesRef.current > 60) {
-        throw new Error(`viewport is ${viewport.w}x${viewport.h} — resize never ran`);
+        throw new Error(`viewport is ${view.w}x${view.h} — resize never ran`);
       }
       return;
     }
     emptyFramesRef.current = 0;
     const items = buildScene({
       felt: store.get(),
-      surface: washRect(stage, viewport),
+      surface: washRect(stage, cam),
       handPos,
       drag,
       hover,
@@ -135,11 +139,20 @@ export function useFeltTable(options: { catalog: Catalog; layout?: readonly Zone
       fonts,
     });
     renderer.render(items, {
-      viewport,
+      camera: cam,
       stage,
       backdrop: { canvas: colors.canvasBg, felt: colors.felt },
     });
   };
 
-  return { felt, store, gestures, canvasRef, glError };
+  return { felt, store, gestures, canvasRef, camera, glError };
+}
+
+/**
+ * Owns one camera store for the component's lifetime.
+ * @returns the camera store to resize and read
+ */
+function useCameraStore(): CameraStore {
+  const [store] = useState(() => createCameraStore());
+  return store;
 }

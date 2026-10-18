@@ -1,6 +1,6 @@
 import { STACK_HEIGHT_CAP } from "./felt";
 import type { Point, Size } from "./geom";
-import { CHIP_RADIUS, CHIP_SQUASH, rpx, SLOT_ROW_HEIGHT, STACK_LIFT } from "./world";
+import { CHIP_RADIUS, CHIP_SQUASH, MAP_SIZE, rpx, SLOT_ROW_HEIGHT, STACK_LIFT } from "./world";
 
 /**
  * The felt's canvas layout: the single authority for the inset/fade contract
@@ -71,32 +71,16 @@ export function createStage(): Stage {
 /** The stage the production felt renders with; derived once at module load. */
 export const stage: Stage = createStage();
 
-/**
- * Placeable felt size for a viewport; the `setFelt` input.
- * @param s - the stage providing the insets
- * @param viewport - canvas size in CSS px
- */
-export function feltSize(s: Stage, viewport: Size): Size {
-  return {
-    w: Math.max(0, viewport.w - s.inset.x * 2),
-    h: Math.max(0, viewport.h - s.inset.top - s.inset.bottom),
-  };
-}
+/** Full world-plane size in world px: the felt map plus the insets around it. */
+export const worldSize: Size = {
+  w: stage.inset.x * 2 + MAP_SIZE.w,
+  h: stage.inset.top + MAP_SIZE.h + stage.inset.bottom,
+};
 
 /**
- * The felt wash quad in felt-local px: the full viewport relative to the felt
- * origin, so the gradient wash covers the headroom too.
+ * Converts a world-px point to felt-local px.
  * @param s - the stage providing the origin
- * @param viewport - canvas size in CSS px
- */
-export function washRect(s: Stage, viewport: Size): { x: number; y: number; w: number; h: number } {
-  return { x: -s.origin.x, y: -s.origin.y, w: viewport.w, h: viewport.h };
-}
-
-/**
- * Converts a canvas-px point to felt-local px.
- * @param s - the stage providing the origin
- * @param p - the point in canvas px
+ * @param p - the point in world px
  */
 export function feltPoint(s: Stage, p: Point): Point {
   return { x: p.x - s.origin.x, y: p.y - s.origin.y };

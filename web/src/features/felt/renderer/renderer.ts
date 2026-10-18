@@ -1,7 +1,7 @@
 // The render front: takes an ordered scene (painter's order) and flushes
 // consecutive same-kind runs as instanced draws, one pass per kind.
 
-import type { Size } from "../geom";
+import type { Camera } from "../camera";
 import type { FontFace } from "../scene/font";
 import type { RGB, SceneItem } from "../scene/primitives";
 import type { Stage } from "../stage";
@@ -17,6 +17,7 @@ type Pass = {
   batch: Batch;
   uResolution: WebGLUniformLocation | null;
   uOrigin: WebGLUniformLocation | null;
+  uPan: WebGLUniformLocation | null;
   uSceneFade: WebGLUniformLocation | null;
   uFeltFade: WebGLUniformLocation | null;
   uCanvasColor: WebGLUniformLocation | null;
@@ -69,6 +70,7 @@ function buildPass(gl: WebGL2RenderingContext, spec: PassSpec): Pass {
     batch: new Batch(gl, program, spec.attrs),
     uResolution: gl.getUniformLocation(program, "uResolution"),
     uOrigin: gl.getUniformLocation(program, "uOrigin"),
+    uPan: gl.getUniformLocation(program, "uPan"),
     uSceneFade: gl.getUniformLocation(program, "uSceneFade"),
     uFeltFade: gl.getUniformLocation(program, "uFeltFade"),
     uCanvasColor: gl.getUniformLocation(program, "uCanvasColor"),
@@ -126,8 +128,8 @@ class Renderer {
    * @param frame - viewport, canvas layout, and backdrop colors
    */
   render(scene: SceneItem[], frame: Frame) {
-    const { viewport } = frame;
-    if (viewport.w <= 0 || viewport.h <= 0) {
+    const { camera } = frame;
+    if (camera.view.w <= 0 || camera.view.h <= 0) {
       return;
     }
 
@@ -194,14 +196,18 @@ class Renderer {
 
     const gl = this.gl;
     const pass = this.passes[kind];
+    const { camera } = frame;
 
     gl.useProgram(pass.program);
     if (pass.uResolution) {
-      gl.uniform2f(pass.uResolution, frame.viewport.w, frame.viewport.h);
+      gl.uniform2f(pass.uResolution, camera.view.w, camera.view.h);
     }
     if (pass.uOrigin) {
       const origin = frame.stage.origin;
       gl.uniform2f(pass.uOrigin, origin.x, origin.y);
+    }
+    if (pass.uPan) {
+      gl.uniform2f(pass.uPan, camera.pan.x, camera.pan.y);
     }
     if (pass.uSceneFade) {
       const sceneFade = frame.stage.sceneFade;
@@ -236,11 +242,11 @@ export type Backdrop = {
   felt: RGB;
 };
 
-/** Everything one render call needs besides the scene itself: the viewport,
- *  the canvas layout authority (felt origin and fade bands, in canvas px),
- *  and the backdrop the fade dissolves into. */
+/** Everything one render call needs besides the scene itself: the camera
+ *  owning the world↔screen mapping, the canvas layout authority (felt origin
+ *  and fade bands, in world px), and the backdrop the fade dissolves into. */
 export type Frame = {
-  viewport: Size;
+  camera: Camera;
   stage: Stage;
   backdrop: Backdrop;
 };

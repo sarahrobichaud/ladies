@@ -1,12 +1,12 @@
 import type { Point, Size } from "./geom";
-import { CHIP_RADIUS, SLOT_ROW_HEIGHT, SLOT_SPACING } from "./world";
+import { CHIP_RADIUS, MAP_COLS, MAP_ROWS, MAP_SIZE, SLOT_ROW_HEIGHT, SLOT_SPACING } from "./world";
 
-/** Staggered slot lattice; odd rows offset half a spacing so slots align on diagonals. */
+/** The fixed slot map: a dev-controlled staggered lattice; odd rows offset half a spacing so slots align on diagonals. */
 
 /** Address of one slot in the lattice. */
 export type Slot = { col: number; row: number };
 
-/** Count of lattice slots along each axis that fit inside the felt. */
+/** Count of lattice slots along each axis in the fixed map. */
 export type GridExtents = { cols: number; rows: number };
 
 /**
@@ -32,26 +32,21 @@ export function isInBounds(slot: Slot, felt: Size): boolean {
 }
 
 /**
- * Count of lattice slots along each axis that fit inside the felt.
- * @param felt - The felt size in pixels.
+ * Count of lattice slots along each axis in the fixed map.
  */
-export function gridExtents(felt: Size): GridExtents {
-  return {
-    cols: Math.max(0, Math.floor((felt.w - CHIP_RADIUS) / SLOT_SPACING) + 1),
-    rows: Math.max(0, Math.floor((felt.h - CHIP_RADIUS) / SLOT_ROW_HEIGHT) + 1),
-  };
+export function gridExtents(): GridExtents {
+  return { cols: MAP_COLS, rows: MAP_ROWS };
 }
 
 /**
- * Every slot whose chip fits fully inside the felt.
- * @param felt - The felt size in pixels.
+ * Every slot of the fixed map whose chip fits fully inside the map felt.
  */
-export function allSlots(felt: Size): Slot[] {
+export function allSlots(): Slot[] {
   const slots: Slot[] = [];
-  for (let row = 0; row * SLOT_ROW_HEIGHT <= felt.h; row++) {
-    for (let col = 0; col * SLOT_SPACING <= felt.w + SLOT_SPACING / 2; col++) {
+  for (let row = 0; row <= MAP_ROWS; row++) {
+    for (let col = 0; col <= MAP_COLS; col++) {
       const slot = { col, row };
-      if (isInBounds(slot, felt)) {
+      if (isInBounds(slot, MAP_SIZE)) {
         slots.push(slot);
       }
     }

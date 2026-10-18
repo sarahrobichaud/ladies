@@ -179,7 +179,7 @@ export function nearestPlaceableSlot(felt: Felt, x: number, y: number): Slot | n
  * @param point - The pointer position in felt pixels.
  */
 export function buttonZoneAt(felt: Felt, point: Point): Zone | null {
-  const zones = resolveZones(felt.layout, felt.felt);
+  const zones = resolveZones(felt.layout);
   for (const zone of zones) {
     if (zone.purpose !== "button") {
       continue;
@@ -203,10 +203,10 @@ export function buttonZoneAt(felt: Felt, point: Point): Zone | null {
  * @param isCandidate - Decides whether a placeable slot may be returned.
  */
 function nearestPlaceableWhere(felt: Felt, x: number, y: number, isCandidate: (slot: Slot) => boolean): Slot | null {
-  const zones = resolveZones(felt.layout, felt.felt);
+  const zones = resolveZones(felt.layout);
   let best: Slot | null = null;
   let bestDistance = Infinity;
-  for (const slot of allSlots(felt.felt)) {
+  for (const slot of allSlots()) {
     const zone = zoneAt(zones, slot);
     if (!zone || !isPlaceable(zone.purpose) || !isCandidate(slot)) {
       continue;

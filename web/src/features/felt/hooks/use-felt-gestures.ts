@@ -1,6 +1,7 @@
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, RefObject } from "react";
-import { useRef, useSyncExternalStore } from "react";
+import { useState, useSyncExternalStore } from "react";
 import type { KindId } from "../../chips/types";
+import { type CameraStore, viewToWorld } from "../camera";
 import {
   commitHand,
   discardHand,
@@ -82,6 +83,8 @@ export type FeltGesturesOptions = {
   store: FeltStore;
   /** Canvas layout authority; supplies the felt origin for pointer mapping. */
   stage: Stage;
+  /** Live camera store; supplies the world↔screen mapping for pointers. */
+  camera: CameraStore;
   /** Ref for the canvas element the gestures are bound to. */
   canvasRef: RefObject<HTMLCanvasElement | null>;
 };
@@ -117,7 +120,7 @@ export type FeltGestures = {
  * @param options - felt store, canvas layout, and canvas ref
  * @returns the controller with handlers, frame access, and lifecycle
  */
-export function createFeltGestures({ store, stage, canvasRef }: FeltGesturesOptions): FeltGestures {
+export function createFeltGestures({ store, stage, camera, canvasRef }: FeltGesturesOptions): FeltGestures {
   let handPos: Point | null = null;
   let drag: Drag | null = null;
   let spawn: Spawn | null = null;
@@ -172,7 +175,7 @@ export function createFeltGestures({ store, stage, canvasRef }: FeltGesturesOpti
     if (!rect) {
       return null;
     }
-    return feltPoint(stage, { x: clientX - rect.left, y: clientY - rect.top });
+    return feltPoint(stage, viewToWorld(camera.get(), { x: clientX - rect.left, y: clientY - rect.top }));
   };
 
   /**
@@ -254,7 +257,7 @@ export function createFeltGestures({ store, stage, canvasRef }: FeltGesturesOpti
     if (!button?.commits) {
       return false;
     }
-    const betZone = zoneById(resolveZones(source.layout, source.felt), button.commits);
+    const betZone = zoneById(resolveZones(source.layout), button.commits);
     if (betZone?.purpose !== "bet") {
       return false;
     }
@@ -477,11 +480,8 @@ export function createFeltGestures({ store, stage, canvasRef }: FeltGesturesOpti
  * @returns the gesture controller
  */
 export function useFeltGestures(options: FeltGesturesOptions): FeltGestures {
-  const ref = useRef<FeltGestures | null>(null);
-  if (ref.current === null) {
-    ref.current = createFeltGestures(options);
-  }
-  return ref.current;
+  const [gestures] = useState(() => createFeltGestures(options));
+  return gestures;
 }
 
 /**
