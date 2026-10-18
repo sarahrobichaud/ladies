@@ -4,7 +4,7 @@ import type { Catalog } from "../../features/chips/types";
 import { FeltCanvas } from "../../features/felt/components/felt-canvas";
 import { clearZone, zoneStackValue } from "../../features/felt/felt";
 import { useFeltTable } from "../../features/felt/hooks/use-felt-table";
-import type { ZoneSpec } from "../../features/felt/zones";
+import { TABLE_LAYOUT } from "../../features/felt/zones";
 import { formatChips } from "../../snapshot";
 import { PlayingCard } from "../player-card";
 import { actionContext, commitPlan, useEpochReset } from "./action-core";
@@ -13,12 +13,9 @@ import type { ActionSystemProps } from "./action-system";
 // Gesture threshold in px.
 const FOLD_DISTANCE = 90;
 
-// The betting line: the only placeable band of slots on the table felt.
+// The bet zone of the shared three-zone table layout; chips staged there are
+// the wager. The stacks/play zones stay placeable but don't count as bets.
 const BET_ZONE_ID = "bet";
-const TABLE_LAYOUT: readonly ZoneSpec[] = [
-  { id: "free", purpose: "stack", slots: "all" },
-  { id: BET_ZONE_ID, purpose: "bet", slots: { cols: { from: 2, to: -3 }, rows: { from: 1, to: 2 } } },
-];
 
 // Chip denominations scaled to the blinds, one palette tier per denomination.
 function blindsCatalog({ small, big }: { small: bigint; big: bigint }): Catalog {
