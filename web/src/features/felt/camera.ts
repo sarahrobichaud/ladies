@@ -3,8 +3,9 @@ import { type Stage, worldSize } from "./stage";
 
 /**
  * The felt camera: the single authority for mapping between the world plane
- * and the screen. It fits the fixed world into the viewport, clamps the scale
- * to readable bounds, and centers the world in the leftover space. Consumers
+ * and the screen. It scales the world so its height fills the viewport (never
+ * shrinking further to fit the width — width overflow pans instead), clamps
+ * the scale to readable bounds, and centers the leftover space. Consumers
  * read the mapping through `worldToView` / `viewToWorld`; nothing else does
  * scale math. The camera lives in an external store: frame and event code
  * read `get()` directly, React components subscribe.
@@ -15,6 +16,33 @@ export const MIN_SCALE = 0.75;
 
 /** Device-px scale upper bound; above it the world letterboxes, centered. */
 export const MAX_SCALE = 1.5;
+
+/** Horizontal anchor points for keyboard panning, as fractions of the world width. */
+export type PanZone = "left" | "center" | "right";
+
+/** Fraction of the world width each pan zone centers on. */
+const ZONE_ANCHOR: Record<PanZone, number> = { left: 0.2, center: 0.5, right: 0.8 };
+
+/** Fraction of the remaining pan distance covered per second while easing. */
+const PAN_EASE_PER_SECOND = 8;
+
+/** Remaining pan distance below which the camera snaps to its target, in world px. */
+const PAN_SNAP_PX = 0.5;
+
+/**
+ * Whether the camera's pan sits on a zone's anchor, so a tween can stop.
+ * @param camera - the camera to check
+ * @param zone - the zone whose anchor to test against
+ */
+export function cameraPanAtTarget(camera: Camera, zone: PanZone): boolean {
+  const overflow = worldSize.w - camera.view.w;
+  if (overflow <= 0) {
+    return true;
+  }
+  const target = ZONE_ANCHOR[zone] * worldSize.w - camera.view.w / 2;
+  const clamped = Math.max(0, Math.min(overflow, target));
+  return Math.abs(clamped - camera.pan.x) < PAN_SNAP_PX;
+}
 
 /** The camera state the renderer, gestures, and DOM chrome share. */
 export type Camera = {
@@ -27,7 +55,8 @@ export type Camera = {
 };
 
 /**
- * Fits the world into a viewport within the scale bounds.
+ * Scales the world so its height fills the viewport, within the scale bounds;
+ * width overflow is handled by panning, not by shrinking.
  * @param viewport - canvas size in screen px
  * @param dpr - device pixel ratio, which scales the clamp bounds so browser
  * zoom is absorbed instead of cropping or letterboxing the map
@@ -38,7 +67,7 @@ export function createCamera(viewport: Size, dpr: number): Camera {
     return { scale: 1, pan: { x: 0, y: 0 }, view: { w: 0, h: 0 } };
   }
   const ratio = dpr > 0 ? dpr : 1;
-  const fit = Math.min(viewport.w / worldSize.w, viewport.h / worldSize.h);
+  const fit = viewport.h / worldSize.h;
   const scale = Math.min(MAX_SCALE / ratio, Math.max(MIN_SCALE / ratio, fit));
   const view = { w: viewport.w / scale, h: viewport.h / scale };
   // The view's top-left world-plane position; centering puts it at the
@@ -80,11 +109,19 @@ export function washRect(s: Stage, camera: Camera): { x: number; y: number; w: n
 export type CameraStore = {
   /** The current camera; stable reference until the next resize. */
   get(): Camera;
-  /** Re-fits the camera to a viewport, notifying subscribers on change.
+  /**
+   * Re-fits the camera to a viewport, notifying subscribers on change.
    * @param viewport - canvas size in screen px
    * @param dpr - device pixel ratio scaling the clamp bounds
    */
   resize(viewport: Size, dpr: number): void;
+  /**
+   * Eases the camera's pan toward a zone anchor over successive frames; a
+   * no-op when the whole world already fits the viewport.
+   * @param zone - the zone to center on
+   * @param dt - seconds since the last frame
+   */
+  panToward(zone: PanZone, dt: number): void;
   /** Subscribes to camera changes; returns the unsubscribe function.
    * @param listener - called after each camera change
    */
@@ -98,6 +135,11 @@ export type CameraStore = {
 export function createCameraStore(): CameraStore {
   let camera = createCamera({ w: 0, h: 0 }, 1);
   const listeners = new Set<() => void>();
+  const notify = () => {
+    for (const listener of listeners) {
+      listener();
+    }
+  };
   return {
     get: () => camera,
     resize: (viewport, dpr) => {
@@ -112,9 +154,26 @@ export function createCameraStore(): CameraStore {
         return;
       }
       camera = next;
-      for (const listener of listeners) {
-        listener();
+      notify();
+    },
+    panToward: (zone, dt) => {
+      const overflow = worldSize.w - camera.view.w;
+      if (overflow <= 0) {
+        return;
       }
+      const target = ZONE_ANCHOR[zone] * worldSize.w - camera.view.w / 2;
+      const clamped = Math.max(0, Math.min(overflow, target));
+      const remaining = clamped - camera.pan.x;
+      if (Math.abs(remaining) < PAN_SNAP_PX) {
+        if (camera.pan.x !== clamped) {
+          camera = { ...camera, pan: { x: clamped, y: camera.pan.y } };
+          notify();
+        }
+        return;
+      }
+      const eased = camera.pan.x + remaining * Math.min(1, PAN_EASE_PER_SECOND * dt);
+      camera = { ...camera, pan: { x: eased, y: camera.pan.y } };
+      notify();
     },
     subscribe: (listener) => {
       listeners.add(listener);

@@ -1,7 +1,7 @@
 import type { MouseEvent as ReactMouseEvent, PointerEvent as ReactPointerEvent, RefObject } from "react";
 import { useState, useSyncExternalStore } from "react";
 import type { KindId } from "../../chips/types";
-import { type CameraStore, viewToWorld } from "../camera";
+import { type CameraStore, type PanZone, viewToWorld } from "../camera";
 import {
   commitHand,
   discardHand,
@@ -105,6 +105,8 @@ export type FeltGestures = {
   reset(): void;
   /** Semantic action sink; assign to react to picks, drops, discards, spawns, and bets. */
   onAction?: (action: FeltAction) => void;
+  /** Camera pan sink; assign to tween the camera toward a zone on a/s/d. */
+  onPan?: (zone: PanZone) => void;
   /** Pointer handlers for the felt canvas element. */
   readonly canvasHandlers: CanvasHandlers;
   /**
@@ -128,6 +130,7 @@ export function createFeltGestures({ store, stage, camera, canvasRef }: FeltGest
   let lift: Lift | null = null;
   let cursor: FeltCursor = "default";
   let onAction: ((action: FeltAction) => void) | undefined;
+  let onPan: ((zone: PanZone) => void) | undefined;
 
   const listeners = new Set<() => void>();
   const frameView: GestureFrame = { handPos: null, drag: null, hover: null };
@@ -450,7 +453,25 @@ export function createFeltGestures({ store, stage, camera, canvasRef }: FeltGest
         store.apply((f) => sizeHand(f, e.deltaY < 0 ? 1 : -1));
       };
       canvas.addEventListener("wheel", onWheel, { passive: false });
-      return () => canvas.removeEventListener("wheel", onWheel);
+
+      // Keyboard panning: pressing a/s/d tweens the camera to the
+      // left/center/right zone; the camera no-ops when the world fits.
+      const zoneKeys: Record<string, PanZone> = { a: "left", s: "center", d: "right" };
+      const onKeyDown = (e: KeyboardEvent) => {
+        const target = e.target as HTMLElement | null;
+        if (target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.isContentEditable)) {
+          return;
+        }
+        const zone = zoneKeys[e.key.toLowerCase()];
+        if (zone && !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey) {
+          onPan?.(zone);
+        }
+      };
+      window.addEventListener("keydown", onKeyDown);
+      return () => {
+        canvas.removeEventListener("wheel", onWheel);
+        window.removeEventListener("keydown", onKeyDown);
+      };
     },
     reset: () => {
       setDrag(null);
@@ -463,6 +484,12 @@ export function createFeltGestures({ store, stage, camera, canvasRef }: FeltGest
     },
     set onAction(sink) {
       onAction = sink;
+    },
+    get onPan() {
+      return onPan;
+    },
+    set onPan(sink) {
+      onPan = sink;
     },
     canvasHandlers,
     trayHandlers: (kind: KindId): TrayHandlers => ({

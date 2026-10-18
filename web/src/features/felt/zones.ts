@@ -7,7 +7,7 @@ import { allSlots, gridExtents, type Slot } from "./lattice";
  */
 
 /** What a slot region is for. */
-export type ZonePurpose = "stack" | "bet" | "button";
+export type ZonePurpose = "stack" | "bet" | "button" | "card";
 
 /** Inclusive slot-index range along one axis; negative values count from the end. */
 export type SlotRange = { from: number; to: number };
@@ -37,6 +37,18 @@ export type Zone = {
 
 /** Default layout: one stack zone covering the whole lattice. */
 export const FREE_LAYOUT: readonly ZoneSpec[] = [{ id: "free", purpose: "stack", slots: "all" }];
+
+/**
+ * Table layout: three zones across the wide lattice.
+ * Left: player chip stacks. Center: bet zone in the top half, open play below.
+ * Right: player card slots (placeholders for now).
+ */
+export const TABLE_LAYOUT: readonly ZoneSpec[] = [
+  { id: "stacks", purpose: "stack", slots: { cols: { from: 0, to: 6 }, rows: { from: 0, to: -1 } } },
+  { id: "bet", purpose: "bet", slots: { cols: { from: 8, to: 15 }, rows: { from: 0, to: 2 } } },
+  { id: "play", purpose: "stack", slots: { cols: { from: 8, to: 15 }, rows: { from: 3, to: -1 } } },
+  { id: "cards", purpose: "card", slots: { cols: { from: 17, to: -1 }, rows: { from: 0, to: -1 } } },
+];
 
 /**
  * Whether a slot resolved to this purpose accepts resting chips.

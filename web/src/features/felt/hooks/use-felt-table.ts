@@ -1,7 +1,7 @@
 import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
 import { useCanvasRenderLoop } from "../../../hooks/use-canvas-render-loop";
 import type { Catalog } from "../../chips/types";
-import { type CameraStore, createCameraStore, washRect } from "../camera";
+import { type CameraStore, cameraPanAtTarget, createCameraStore, type PanZone, washRect } from "../camera";
 import type { Felt } from "../felt";
 import { setFelt } from "../felt";
 import { createPrimitiveRenderer, type PrimitiveRenderer } from "../renderer/renderer";
@@ -42,6 +42,11 @@ export function useFeltTable(options: { catalog: Catalog; layout?: readonly Zone
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const camera = useCameraStore();
   const gestures = useFeltGestures({ store, canvasRef, stage, camera });
+  // Camera pan target while a/s/d tweens toward a zone; null when settled.
+  const panTargetRef = useRef<PanZone | null>(null);
+  gestures.onPan = (zone) => {
+    panTargetRef.current = zone;
+  };
 
   const rendererRef = useRef<PrimitiveRenderer | null>(null);
   const colorsRef = useSceneColors();
@@ -88,6 +93,9 @@ export function useFeltTable(options: { catalog: Catalog; layout?: readonly Zone
     return gestures.attach(el);
   }, [gestures]);
 
+  // Last frame time, for the pan easing's dt.
+  const lastFrameRef = useRef(0);
+
   useCanvasRenderLoop(canvasRef, {
     onResize: (size, dpr) => {
       camera.resize(size, dpr);
@@ -100,6 +108,15 @@ export function useFeltTable(options: { catalog: Catalog; layout?: readonly Zone
         return;
       }
       try {
+        if (panTargetRef.current) {
+          const dt = lastFrameRef.current > 0 ? Math.min((time - lastFrameRef.current) / 1000, 0.1) : 0;
+          camera.panToward(panTargetRef.current, dt);
+          // The tween is done when the camera sits exactly on its target.
+          if (cameraPanAtTarget(camera.get(), panTargetRef.current)) {
+            panTargetRef.current = null;
+          }
+        }
+        lastFrameRef.current = time;
         drawFrame(time, dpr, renderer);
       } catch (err) {
         reportGlError("draw failed", err);

@@ -54,6 +54,7 @@ export function buildScene(input: SceneInput): SceneItem[] {
   const zones = feltZones(felt);
   pushLattice(items, zones, colors);
   pushZoneMarks(items, zones);
+  pushCardSlots(items, zones, colors);
   pushButtons(items, zones, colors, fonts);
 
   const landing = felt.hand && handPos ? landingFor(felt, handPos) : null;
@@ -139,6 +140,46 @@ function pushZoneMarks(items: SceneItem[], zones: Zone[]) {
     for (const slot of zone.slots) {
       const { x, y } = slotPosition(slot);
       items.push(spot(x, y, CHIP_RADIUS - betSpot.inset, betSpot.alpha, betSpot.soft));
+    }
+  }
+}
+
+// Card slots: upright rounded panels standing in for player cards, sized to
+// fit a pair inside one slot's spacing.
+const cardSlot = {
+  halfW: rpx(0.42),
+  halfH: rpx(0.62),
+  radius: rpx(0.07),
+  fillAlpha: 0.12,
+  strokeAlpha: 0.35,
+  gap: rpx(0.1),
+} as const;
+
+/**
+ * Draw card-zone slots as placeholder card outlines, one pair per slot row.
+ * @param items - scene list to append to
+ * @param zones - resolved zones to read card slots from
+ * @param colors - resolved theme colors
+ */
+function pushCardSlots(items: SceneItem[], zones: Zone[], colors: SceneColors) {
+  for (const zone of zones) {
+    if (zone.purpose !== "card") {
+      continue;
+    }
+    for (const slot of zone.slots) {
+      const { x, y } = slotPosition(slot);
+      for (const dx of [-cardSlot.halfW - cardSlot.gap / 2, cardSlot.halfW + cardSlot.gap / 2]) {
+        items.push({
+          kind: "panel",
+          x: x + dx,
+          y,
+          hw: cardSlot.halfW,
+          hh: cardSlot.halfH,
+          radius: cardSlot.radius,
+          fill: rgba(colors.onFelt, cardSlot.fillAlpha),
+          stroke: rgba(colors.onFelt, cardSlot.strokeAlpha),
+        });
+      }
     }
   }
 }

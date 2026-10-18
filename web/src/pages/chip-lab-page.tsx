@@ -19,7 +19,7 @@ import type { FeltAction } from "../features/felt/hooks/use-felt-gestures";
 import { useFeltTable } from "../features/felt/hooks/use-felt-table";
 import { nearestFreeSlot } from "../features/felt/interaction";
 import { allSlots } from "../features/felt/lattice";
-import { FREE_LAYOUT, type ZoneSpec } from "../features/felt/zones";
+import { FREE_LAYOUT, TABLE_LAYOUT, type ZoneSpec } from "../features/felt/zones";
 import { chipLabel, formatChips } from "../snapshot";
 
 // Poker layout: the whole lattice accepts stacks, with a staged bet zone near
@@ -35,6 +35,13 @@ const POKER_LAYOUT: readonly ZoneSpec[] = [
     commits: "bet-0",
   },
 ];
+
+// Three-zone table layout: player stacks left, bet/play center, cards right.
+const LAB_LAYOUTS: Record<"free" | "poker" | "table", readonly ZoneSpec[]> = {
+  free: FREE_LAYOUT,
+  poker: POKER_LAYOUT,
+  table: TABLE_LAYOUT,
+};
 
 // A random canonical stack: 1..STACK_CAPACITY chips split into runs of
 // random denominations. coalesce merges adjacent same-kind runs.
@@ -52,9 +59,9 @@ function randomRuns(catalog: Catalog): Run[] {
 }
 
 export function ChipLabPage() {
-  const table = useFeltTable({ catalog: CATALOG, layout: POKER_LAYOUT });
+  const table = useFeltTable({ catalog: CATALOG, layout: TABLE_LAYOUT });
   const { felt, store, gestures } = table;
-  const [layoutName, setLayoutName] = useState<"free" | "poker">("poker");
+  const [layoutName, setLayoutName] = useState<"free" | "poker" | "table">("table");
   const [lastAction, setLastAction] = useState<string | null>(null);
   gestures.onAction = (action: FeltAction) => {
     if (action.type === "bet") {
@@ -66,9 +73,10 @@ export function ChipLabPage() {
   const [notationError, setNotationError] = useState<string | null>(null);
 
   const toggleLayout = () => {
-    const next = layoutName === "free" ? POKER_LAYOUT : FREE_LAYOUT;
-    setLayoutName(layoutName === "free" ? "poker" : "free");
-    store.apply((f) => setFeltLayout(f, next));
+    const order: ("free" | "poker" | "table")[] = ["table", "poker", "free"];
+    const next = order[(order.indexOf(layoutName) + 1) % order.length];
+    setLayoutName(next);
+    store.apply((f) => setFeltLayout(f, LAB_LAYOUTS[next]));
   };
 
   const total = totalValue(felt);
@@ -121,7 +129,7 @@ export function ChipLabPage() {
             className="rounded-md border border-line bg-raised px-3 py-1.5 text-sm text-ink hover:bg-blue-tint"
             onClick={toggleLayout}
           >
-            {layoutName === "free" ? "Poker layout" : "Free layout"}
+            {layoutName === "free" ? "Free layout" : layoutName === "poker" ? "Poker layout" : "Table layout"}
           </button>
           <form
             className="flex items-center gap-1.5"

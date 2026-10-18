@@ -44,8 +44,8 @@ export const SLOT_ROW_HEIGHT = Math.round(SLOT_SPACING * (Math.sqrt(3) / 2));
 // The slot map: dev-controlled lattice extents the felt always shows, sized
 // for three areas (player stack left, bet zone center front, cards right).
 
-/** Lattice columns of the fixed slot map. */
-export const MAP_COLS = 12;
+/** Lattice columns of the fixed slot map; wide enough for the three table zones side by side. */
+export const MAP_COLS = 24;
 
 /** Lattice rows of the fixed slot map; the camera always shows all of them. */
 export const MAP_ROWS = 6;

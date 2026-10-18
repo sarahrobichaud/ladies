@@ -32,10 +32,12 @@ export function isInBounds(slot: Slot, felt: Size): boolean {
 }
 
 /**
- * Count of lattice slots along each axis in the fixed map.
+ * Extent zone rect ranges resolve against: the closed enumeration ranges of
+ * `allSlots` (0..MAP_COLS, 0..MAP_ROWS inclusive), so negative indices count
+ * from the last enumerated slot and rects can cover the whole felt.
  */
 export function gridExtents(): GridExtents {
-  return { cols: MAP_COLS, rows: MAP_ROWS };
+  return { cols: MAP_COLS + 1, rows: MAP_ROWS + 1 };
 }
 
 /**
